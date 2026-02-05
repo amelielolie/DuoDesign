@@ -1,0 +1,170 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html, body, #root {
+  width: 100%;
+  height: 100dvh;
+  overflow: hidden;
+  background: #080e14;
+  color: #fff;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 0.7; }
+  50% { opacity: 1; }
+}
+
+@keyframes walkBob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-3px); }
+}
+
+/* Sprite sheet animation: 3x3 grid = 9 frames */
+@keyframes spriteWalk {
+  0%      { background-position: 0% 0%; }
+  11.11%  { background-position: 50% 0%; }
+  22.22%  { background-position: 100% 0%; }
+  33.33%  { background-position: 0% 50%; }
+  44.44%  { background-position: 50% 50%; }
+  55.55%  { background-position: 100% 50%; }
+  66.66%  { background-position: 0% 100%; }
+  77.77%  { background-position: 50% 100%; }
+  88.88%  { background-position: 100% 100%; }
+  100%    { background-position: 0% 0%; }
+}
+
+@keyframes rainFall {
+  0% { transform: translateY(-10vh); opacity: 0; }
+  10% { opacity: 1; }
+  90% { opacity: 1; }
+  100% { transform: translateY(110vh); opacity: 0; }
+}
+
+@keyframes petalFall {
+  0% {
+    transform: translateY(-10vh) rotate(0deg) translateX(0);
+    opacity: 0;
+  }
+  10% { opacity: 1; }
+  50% {
+    transform: translateY(50vh) rotate(180deg) translateX(30px);
+  }
+  90% { opacity: 0.6; }
+  100% {
+    transform: translateY(110vh) rotate(360deg) translateX(-20px);
+    opacity: 0;
+  }
+}
+
+@keyframes snowFall {
+  0% {
+    transform: translateY(-10vh) translateX(0);
+    opacity: 0;
+  }
+  5% { opacity: 1; }
+  25% {
+    transform: translateY(25vh) translateX(8px);
+  }
+  50% {
+    transform: translateY(50vh) translateX(-5px);
+  }
+  75% {
+    transform: translateY(75vh) translateX(10px);
+  }
+  95% { opacity: 0.8; }
+  100% {
+    transform: translateY(110vh) translateX(-3px);
+    opacity: 0;
+  }
+}
+
+@keyframes snowStorm {
+  0% {
+    transform: translateY(-10vh) translateX(0);
+    opacity: 0;
+  }
+  3% { opacity: 1; }
+  100% {
+    transform: translateY(115vh) translateX(40vw);
+    opacity: 0.6;
+  }
+}
+
+@keyframes fireflyFloat {
+  0% { transform: translate(0, 0); opacity: 0.3; }
+  25% { transform: translate(10px, -15px); opacity: 0.8; }
+  50% { transform: translate(-5px, -10px); opacity: 0.5; }
+  75% { transform: translate(15px, 5px); opacity: 0.9; }
+  100% { transform: translate(-10px, 10px); opacity: 0.4; }
+}
+
+@keyframes dustFloat {
+  0% { transform: translate(0, 0); opacity: 0.1; }
+  50% { transform: translate(8px, -12px); opacity: 0.25; }
+  100% { transform: translate(-5px, 5px); opacity: 0.1; }
+}
+
+@keyframes billFloat {
+  0%, 100% { transform: translateY(0) rotate(-2deg); }
+  50% { transform: translateY(-8px) rotate(2deg); }
+}
+
+@keyframes collectFlash {
+  0% { transform: translate(-50%, 50%) scale(0.3); opacity: 1; }
+  100% { transform: translate(-50%, 50%) scale(2.5); opacity: 0; }
+}
+
+@keyframes collectText {
+  0% { transform: translateX(-50%) translateY(0); opacity: 1; }
+  100% { transform: translateX(-50%) translateY(-40px); opacity: 0; }
+}
+
+@keyframes frozenFloat {
+  0%, 100% {
+    transform: translateY(0) rotate(-1deg);
+    filter: brightness(1);
+  }
+  50% {
+    transform: translateY(-6px) rotate(1deg);
+    filter: brightness(1.2);
+  }
+}
+
+@keyframes iceShard {
+  0% {
+    transform: rotate(var(--rotation, 0deg)) translateY(0) scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: rotate(var(--rotation, 0deg)) translateY(-60px) translateX(30px) scale(0.3);
+    opacity: 0;
+  }
+}
+
+@keyframes iceFlash {
+  0% {
+    transform: translate(-50%, -50%) scale(0.2);
+    opacity: 1;
+  }
+  50% {
+    transform: translate(-50%, -50%) scale(1.5);
+    opacity: 0.8;
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(2);
+    opacity: 0;
+  }
+}
