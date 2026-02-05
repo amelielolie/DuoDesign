@@ -3,9 +3,38 @@ import { useGameStore } from '../store/gameStore'
 
 // Global master gain for muting
 let masterGainNode: GainNode | null = null
+let sharedAudioCtx: AudioContext | null = null
+let musicStarted = false
+
+// Call this during a user gesture (tap/click) to unlock audio on iOS
+export function unlockAudioContext() {
+  if (sharedAudioCtx) {
+    if (sharedAudioCtx.state === 'suspended') {
+      sharedAudioCtx.resume()
+    }
+    return
+  }
+
+  const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext
+  const ctx = new AudioCtx()
+  sharedAudioCtx = ctx
+
+  // iOS requires resume() in same gesture
+  if (ctx.state === 'suspended') {
+    ctx.resume()
+  }
+
+  // Play a silent oscillator to fully unlock audio on iOS
+  const unlockOsc = ctx.createOscillator()
+  const unlockGain = ctx.createGain()
+  unlockGain.gain.value = 0.001
+  unlockOsc.connect(unlockGain)
+  unlockGain.connect(ctx.destination)
+  unlockOsc.start()
+  unlockOsc.stop(ctx.currentTime + 0.1)
+}
 
 export function AmbientMusic() {
-  const audioCtxRef = useRef<AudioContext | null>(null)
   const startedRef = useRef(false)
   const soundMuted = useGameStore((s) => s.soundMuted)
   const phase = useGameStore((s) => s.phase)
@@ -18,60 +47,39 @@ export function AmbientMusic() {
     }
   }, [soundMuted, phase])
 
+  // Start music when phase becomes 'exploring' and audio context is ready
   useEffect(() => {
-    const startAudio = () => {
-      if (startedRef.current) return
-      startedRef.current = true
+    if (phase !== 'exploring') return
+    if (startedRef.current || musicStarted) return
+    if (!sharedAudioCtx) return
 
-      // Create AudioContext synchronously in user gesture
-      const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext
-      const ctx = new AudioCtx()
-      audioCtxRef.current = ctx
+    const ctx = sharedAudioCtx
+    if (ctx.state === 'suspended') {
+      ctx.resume()
+    }
 
-      // iOS requires resume() in same gesture
-      if (ctx.state === 'suspended') {
-        ctx.resume()
+    startedRef.current = true
+    musicStarted = true
+
+    // Small delay to ensure context is fully running
+    const timer = setTimeout(() => {
+      if (ctx.state === 'running') {
+        setupAmbientMusic(ctx)
+      } else {
+        ctx.resume().then(() => setupAmbientMusic(ctx))
       }
+    }, 200)
 
-      // Create a silent oscillator to fully unlock audio
-      const unlockOsc = ctx.createOscillator()
-      const unlockGain = ctx.createGain()
-      unlockGain.gain.value = 0.001
-      unlockOsc.connect(unlockGain)
-      unlockGain.connect(ctx.destination)
-      unlockOsc.start()
-      unlockOsc.stop(ctx.currentTime + 0.1)
-
-      // Start music after unlock
-      setTimeout(() => {
-        if (ctx.state === 'suspended') {
-          ctx.resume().then(() => setupAmbientMusic(ctx))
-        } else {
-          setupAmbientMusic(ctx)
-        }
-      }, 150)
-    }
-
-    // Use touchstart for iOS (fires before touchend)
-    const events = ['touchstart', 'mousedown', 'keydown']
-
-    const handler = () => {
-      startAudio()
-      // Remove all listeners after first trigger
-      events.forEach(e => document.removeEventListener(e, handler))
-    }
-
-    events.forEach(e => document.addEventListener(e, handler, { passive: true }))
-
-    return () => {
-      events.forEach(e => document.removeEventListener(e, handler))
-    }
-  }, [])
+    return () => clearTimeout(timer)
+  }, [phase])
 
   useEffect(() => {
     return () => {
-      if (audioCtxRef.current && audioCtxRef.current.state !== 'closed') {
-        audioCtxRef.current.close()
+      if (sharedAudioCtx && sharedAudioCtx.state !== 'closed') {
+        sharedAudioCtx.close()
+        sharedAudioCtx = null
+        musicStarted = false
+        masterGainNode = null
       }
     }
   }, [])
@@ -83,7 +91,7 @@ function setupAmbientMusic(ctx: AudioContext) {
   const master = ctx.createGain()
   master.gain.value = 0.5
   master.connect(ctx.destination)
-  masterGainNode = master // Store reference for muting
+  masterGainNode = master
 
   // Reverb
   const convolver = ctx.createConvolver()
@@ -123,11 +131,10 @@ function setupAmbientMusic(ctx: AudioContext) {
   bLfoG.gain.value = 8
   bLfo.connect(bLfoG)
   bLfoG.connect(bass.frequency)
-  bLfo.start()
+  bLfo.start();
 
   // Pad chord
-  const padFreqs = [110, 130.81, 164.81, 220]
-  padFreqs.forEach((freq: number) => {
+  [110, 130.81, 164.81, 220].forEach((freq: number) => {
     const osc = ctx.createOscillator()
     osc.type = 'sawtooth'
     osc.frequency.value = freq

@@ -7,11 +7,16 @@ export function EndingSequence() {
   const reset = useGameStore((s) => s.reset)
   const [stage, setStage] = useState<'video' | 'reward'>('video')
   const [cardImage, setCardImage] = useState<string | null>(null)
+  const [videoMuted, setVideoMuted] = useState(true)
+  const [showUnmuteHint, setShowUnmuteHint] = useState(true)
   const canvasRef = useRef<HTMLCanvasElement>(null)
+  const videoRef = useRef<HTMLVideoElement>(null)
 
   useEffect(() => {
     if (phase !== 'ending') return
     setStage('video')
+    setVideoMuted(true)
+    setShowUnmuteHint(true)
 
     // Generate share card while video plays
     const cardTimer = setTimeout(() => generateCard(), 1000)
@@ -20,6 +25,14 @@ export function EndingSequence() {
       clearTimeout(cardTimer)
     }
   }, [phase, setPhase])
+
+  const handleUnmute = useCallback(() => {
+    if (videoRef.current) {
+      videoRef.current.muted = false
+      setVideoMuted(false)
+      setShowUnmuteHint(false)
+    }
+  }, [])
 
   const generateCard = useCallback(() => {
     const canvas = canvasRef.current
@@ -113,16 +126,27 @@ export function EndingSequence() {
       }}>
         {/* Brand video stage */}
         {stage === 'video' && (
-          <div style={{
-            width: '100%',
-            height: '100%',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            background: '#000',
-          }}>
+          <div
+            onClick={handleUnmute}
+            onTouchEnd={(e) => {
+              e.preventDefault()
+              handleUnmute()
+            }}
+            style={{
+              width: '100%',
+              height: '100%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              background: '#000',
+              position: 'relative',
+              cursor: 'pointer',
+            }}
+          >
             <video
+              ref={videoRef}
               autoPlay
+              muted
               playsInline
               onEnded={() => {
                 setStage('reward')
@@ -137,6 +161,37 @@ export function EndingSequence() {
             >
               <source src="/DUO_VIDEO.mp4" type="video/mp4" />
             </video>
+
+            {/* Tap to unmute hint */}
+            {videoMuted && showUnmuteHint && (
+              <div style={{
+                position: 'absolute',
+                bottom: '10%',
+                left: '50%',
+                transform: 'translateX(-50%)',
+                background: 'rgba(0,0,0,0.6)',
+                borderRadius: '50px',
+                padding: '10px 20px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                animation: 'fadeIn 0.5s ease',
+                pointerEvents: 'none',
+              }}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2">
+                  <path d="M11 5L6 9H2v6h4l5 4V5z" />
+                  <line x1="23" y1="9" x2="17" y2="15" />
+                  <line x1="17" y1="9" x2="23" y2="15" />
+                </svg>
+                <span style={{
+                  color: '#fff',
+                  fontSize: '0.7rem',
+                  letterSpacing: '0.1em',
+                }}>
+                  TAP FOR SOUND
+                </span>
+              </div>
+            )}
           </div>
         )}
 
