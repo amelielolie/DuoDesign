@@ -131,7 +131,7 @@ export function EndingSequence() {
               style={{
                 width: '100%',
                 maxHeight: '100%',
-                aspectRatio: '16 / 9',
+                aspectRatio: '3 / 4',
                 objectFit: 'contain',
               }}
             >
