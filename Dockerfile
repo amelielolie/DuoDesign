@@ -25,8 +25,9 @@ server {
             video/webm webm;
             video/ogg ogg;
         }
-        add_header Accept-Ranges bytes;
-        add_header Cache-Control "public, max-age=31536000";
+        add_header Accept-Ranges bytes always;
+        add_header Cache-Control "no-cache";
+        etag on;
     }
 }
 NGINX
