@@ -1,0 +1,9 @@
+node_modules
+duo-world/node_modules
+duo-world/dist
+.git
+.DS_Store
+DUO_WITH_LOGO
+docs
+*.md
+!duo-world/README.md
