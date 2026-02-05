@@ -9,6 +9,25 @@ RUN npm run build
 
 FROM nginx:alpine
 COPY --from=build /app/dist /usr/share/nginx/html
-# SPA fallback
-RUN echo 'server { listen 80; root /usr/share/nginx/html; location / { try_files $uri /index.html; } }' > /etc/nginx/conf.d/default.conf
+# SPA fallback + video support (byte-range requests, correct MIME types)
+RUN cat > /etc/nginx/conf.d/default.conf <<'NGINX'
+server {
+    listen 80;
+    root /usr/share/nginx/html;
+
+    location / {
+        try_files $uri /index.html;
+    }
+
+    location ~* \.(mp4|webm|ogg)$ {
+        types {
+            video/mp4 mp4;
+            video/webm webm;
+            video/ogg ogg;
+        }
+        add_header Accept-Ranges bytes;
+        add_header Cache-Control "public, max-age=31536000";
+    }
+}
+NGINX
 EXPOSE 80
