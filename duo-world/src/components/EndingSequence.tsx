@@ -16,15 +16,8 @@ export function EndingSequence() {
     // Generate share card while video plays
     const cardTimer = setTimeout(() => generateCard(), 1000)
 
-    // Move to reward after video
-    const rewardTimer = setTimeout(() => {
-      setStage('reward')
-      setPhase('reward')
-    }, 5000)
-
     return () => {
       clearTimeout(cardTimer)
-      clearTimeout(rewardTimer)
     }
   }, [phase, setPhase])
 
@@ -126,20 +119,24 @@ export function EndingSequence() {
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            background: 'linear-gradient(180deg, #0a1520, #080e14)',
+            background: '#000',
           }}>
-            <div style={{
-              color: '#fff',
-              fontSize: '1.5rem',
-              fontWeight: 700,
-              letterSpacing: '0.2em',
-              textAlign: 'center',
-            }}>
-              <div style={{ opacity: 0.4, fontSize: '0.7rem', marginBottom: '1rem', fontWeight: 300 }}>
-                [BRAND VIDEO]
-              </div>
-              DUO DESIGN
-            </div>
+            <video
+              autoPlay
+              playsInline
+              onEnded={() => {
+                setStage('reward')
+                setPhase('reward')
+              }}
+              style={{
+                width: '100%',
+                maxHeight: '100%',
+                aspectRatio: '16 / 9',
+                objectFit: 'contain',
+              }}
+            >
+              <source src="/DUO_VIDEO.mp4" type="video/mp4" />
+            </video>
           </div>
         )}
 

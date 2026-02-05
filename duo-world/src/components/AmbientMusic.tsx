@@ -8,13 +8,15 @@ export function AmbientMusic() {
   const audioCtxRef = useRef<AudioContext | null>(null)
   const startedRef = useRef(false)
   const soundMuted = useGameStore((s) => s.soundMuted)
+  const phase = useGameStore((s) => s.phase)
 
-  // Handle mute/unmute
+  // Handle mute/unmute and stop music during ending
   useEffect(() => {
     if (masterGainNode) {
-      masterGainNode.gain.setTargetAtTime(soundMuted ? 0 : 0.5, masterGainNode.context.currentTime, 0.1)
+      const shouldMute = soundMuted || phase === 'ending' || phase === 'reward'
+      masterGainNode.gain.setTargetAtTime(shouldMute ? 0 : 0.5, masterGainNode.context.currentTime, 0.3)
     }
-  }, [soundMuted])
+  }, [soundMuted, phase])
 
   useEffect(() => {
     const startAudio = () => {

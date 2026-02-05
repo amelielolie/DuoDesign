@@ -18,16 +18,16 @@ const BILL_POSITIONS = Array.from({ length: BILL_COUNT }, (_, i) => ({
   y: 20 + seededRandom(i, 100) * 35,  // height: 20-55% from bottom
 }))
 
-// Frozen bills - world x positions (like regular bills but in blizzard zone)
+// Frozen bills - each triggers at a worldX and appears at a fixed screen spot
 const FROZEN_BILLS = [
-  { x: 0.78, y: 28 },
-  { x: 0.81, y: 42 },
-  { x: 0.84, y: 25 },
-  { x: 0.87, y: 38 },
-  { x: 0.89, y: 32 },
-  { x: 0.91, y: 45 },
-  { x: 0.93, y: 22 },
-  { x: 0.95, y: 35 },
+  { trigger: 0.76, y: 28 },
+  { trigger: 0.79, y: 42 },
+  { trigger: 0.82, y: 25 },
+  { trigger: 0.84, y: 38 },
+  { trigger: 0.87, y: 32 },
+  { trigger: 0.89, y: 45 },
+  { trigger: 0.91, y: 22 },
+  { trigger: 0.93, y: 35 },
 ]
 
 export function GameWorld() {
@@ -104,29 +104,29 @@ export function GameWorld() {
     })
   }, [worldX, jumpY, collectedBills, collectBill, maxScroll])
 
-  // Frozen bill collision detection - same logic as regular bills
+  // Frozen bill collision detection - screen-relative positioning
   useEffect(() => {
-    if (maxScroll === 0 || worldX < 0.72) return
-    const factor = maxScroll / window.innerWidth * 100 + 100
+    if (worldX < 0.75) return
     FROZEN_BILLS.forEach((bill, i) => {
       if (collectedFrozenBills.has(i)) return
-      const billScreenX = (bill.x - worldX) * factor
-      // Check if bill is within character's horizontal range (character at ~38-50%)
-      if (Math.abs(billScreenX - 45) < 18) {
+      // Bill is active when player is within 0.03 past its trigger point
+      const dist = worldX - bill.trigger
+      if (dist >= 0 && dist < 0.03) {
+        // Bill sits at ~45% screen (right where character walks through it)
         const charBottom = 12 + (jumpY / window.innerHeight) * 100
         const charTop = charBottom + 28
-        if (bill.y >= charBottom - 8 && bill.y <= charTop + 8) {
+        if (bill.y >= charBottom - 10 && bill.y <= charTop + 10) {
           setCollectedFrozenBills(prev => new Set([...prev, i]))
           collectBill(100 + i)
           const id = effectIdRef.current++
-          setIceBreakEffects(prev => [...prev, { id, x: billScreenX, y: bill.y }])
+          setIceBreakEffects(prev => [...prev, { id, x: 45, y: bill.y }])
           setTimeout(() => {
             setIceBreakEffects(prev => prev.filter(e => e.id !== id))
           }, 1000)
         }
       }
     })
-  }, [worldX, jumpY, collectedFrozenBills, collectBill, maxScroll])
+  }, [worldX, jumpY, collectedFrozenBills, collectBill])
 
   // Animation loop
   const animate = useCallback(() => {
@@ -354,12 +354,14 @@ export function GameWorld() {
         )
       })}
 
-      {/* Frozen dollar bills in blizzard zone - use same positioning as regular bills */}
-      {worldX >= 0.72 && FROZEN_BILLS.map((bill, i) => {
+      {/* Frozen dollar bills in blizzard zone - screen-relative */}
+      {worldX >= 0.74 && FROZEN_BILLS.map((bill, i) => {
         if (collectedFrozenBills.has(i)) return null
-        // Use same screen position calculation as regular bills
-        const screenX = (bill.x - worldX) * (maxScroll / window.innerWidth * 100 + 100)
-        if (screenX < -15 || screenX > 115) return null
+        // Show bill from 0.02 before trigger to 0.04 after
+        const dist = worldX - bill.trigger
+        if (dist < -0.02 || dist > 0.04) return null
+        // Bill appears ahead at 65% and moves left to 35% as player walks through
+        const screenX = 65 - (dist + 0.02) * (30 / 0.06)
         return (
           <div
             key={`frozen-${i}`}
