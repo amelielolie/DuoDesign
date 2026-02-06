@@ -25,9 +25,10 @@ server {
             video/webm webm;
             video/ogg ogg;
         }
+        # no-store prevents Cloudflare from caching, preserving range requests
+        add_header Cache-Control "no-store" always;
         add_header Accept-Ranges bytes always;
-        add_header Cache-Control "no-cache";
-        etag on;
+        etag off;
     }
 }
 NGINX

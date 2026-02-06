@@ -139,7 +139,7 @@ export function EndingSequence() {
                 objectFit: 'contain',
               }}
             >
-              <source src="/DUO_VIDEO.mp4?v=2" type="video/mp4" />
+              <source src="/DUO_VIDEO.mp4?v=3" type="video/mp4" />
             </video>
 
             <button

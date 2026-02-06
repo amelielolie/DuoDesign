@@ -115,12 +115,12 @@ export function GameWorld() {
 
   // Frozen bill collision detection - screen-relative positioning
   useEffect(() => {
-    if (worldX < 0.75) return
+    if (worldX < 0.72) return
     FROZEN_BILLS.forEach((bill, i) => {
       if (collectedFrozenBills.has(i)) return
-      // Bill is active when player is within 0.03 past its trigger point
+      // Bill is active when player is within 0.05 past its trigger point
       const dist = worldX - bill.trigger
-      if (dist >= 0 && dist < 0.03) {
+      if (dist >= -0.01 && dist < 0.05) {
         // Bill sits at ~45% screen (right where character walks through it)
         const charBottom = 12 + (jumpY / window.innerHeight) * 100
         const charTop = charBottom + 28
@@ -364,13 +364,13 @@ export function GameWorld() {
       })}
 
       {/* Frozen dollar bills in blizzard zone - screen-relative */}
-      {worldX >= 0.74 && FROZEN_BILLS.map((bill, i) => {
+      {worldX >= 0.72 && FROZEN_BILLS.map((bill, i) => {
         if (collectedFrozenBills.has(i)) return null
-        // Show bill from 0.02 before trigger to 0.04 after
+        // Show bill from 0.04 before trigger to 0.06 after (wider window)
         const dist = worldX - bill.trigger
-        if (dist < -0.02 || dist > 0.04) return null
-        // Bill appears ahead at 65% and moves left to 35% as player walks through
-        const screenX = 65 - (dist + 0.02) * (30 / 0.06)
+        if (dist < -0.04 || dist > 0.06) return null
+        // Bill appears ahead at 75% and moves left to 25% as player walks through
+        const screenX = 75 - (dist + 0.04) * (50 / 0.10)
         return (
           <div
             key={`frozen-${i}`}
