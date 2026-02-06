@@ -29,24 +29,25 @@ export function EndingSequence() {
     const video = videoRef.current
     if (!video || videoPlaying) return
 
+    // Try with sound first, fall back to muted
     video.muted = false
-    video.play().then(() => {
-      setVideoPlaying(true)
-    }).catch(() => {
-      // If unmuted play fails, try muted first then unmute
-      video.muted = true
-      video.play().then(() => {
+    const tryPlay = video.play()
+    if (tryPlay) {
+      tryPlay.then(() => {
         setVideoPlaying(true)
-        // Try to unmute after a short delay
-        setTimeout(() => {
-          video.muted = false
-        }, 100)
       }).catch(() => {
-        // Last resort: skip to reward
-        setStage('reward')
-        setPhase('reward')
+        video.muted = true
+        video.play().then(() => {
+          setVideoPlaying(true)
+        }).catch(() => {
+          setStage('reward')
+          setPhase('reward')
+        })
       })
-    })
+    } else {
+      // Old browsers where play() doesn't return a promise
+      setVideoPlaying(true)
+    }
   }, [videoPlaying, setPhase])
 
   const generateCard = useCallback(() => {
@@ -143,10 +144,6 @@ export function EndingSequence() {
         {stage === 'video' && (
           <div
             onClick={handlePlayVideo}
-            onTouchEnd={(e) => {
-              e.preventDefault()
-              handlePlayVideo()
-            }}
             style={{
               width: '100%',
               height: '100%',
@@ -209,6 +206,24 @@ export function EndingSequence() {
                 }}>
                   TAP TO PLAY
                 </span>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setStage('reward')
+                    setPhase('reward')
+                  }}
+                  style={{
+                    marginTop: '2rem',
+                    background: 'none',
+                    border: 'none',
+                    color: 'rgba(255,255,255,0.3)',
+                    fontSize: '0.65rem',
+                    letterSpacing: '0.1em',
+                    cursor: 'pointer',
+                  }}
+                >
+                  SKIP
+                </button>
               </div>
             )}
           </div>
