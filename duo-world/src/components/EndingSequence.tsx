@@ -36,7 +36,6 @@ export function EndingSequence() {
   const videoRef = useRef<HTMLVideoElement>(null)
   const stallTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const autoplayTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const hasAttemptedUnmute = useRef(false)
 
   // Reset state when entering the ending phase
   useEffect(() => {
@@ -49,7 +48,6 @@ export function EndingSequence() {
     setVideoError(false)
     setVideoErrorLabel('unknown')
     setVideoBuffering(false)
-    hasAttemptedUnmute.current = false
 
     // Generate share card while video plays
     const cardTimer = setTimeout(() => generateCard(), 1000)
@@ -61,70 +59,60 @@ export function EndingSequence() {
     }
   }, [phase])
 
-  // Reload video when URL changes and attempt autoplay.
-  // Strategy: autoplay muted (works everywhere), then try to unmute.
+  // When videoUrl changes, reload and let the HTML autoplay/muted attributes
+  // handle playback. iOS respects <video autoplay muted playsinline> as HTML
+  // attributes but blocks programmatic video.play() without a user gesture.
   useEffect(() => {
     const video = videoRef.current
     if (!video) return
-    video.setAttribute('playsinline', 'true')
-    video.setAttribute('webkit-playsinline', 'true')
-    video.muted = true
     video.load()
 
-    hasAttemptedUnmute.current = false
-
-    // After load, try autoplay
-    const attemptAutoplay = async () => {
-      try {
-        // Try unmuted first (works on desktop)
-        video.muted = false
-        await video.play()
-        setVideoStarted(true)
-        setVideoMuted(false)
-        setAutoplayFailed(false)
-        return
-      } catch {
-        // Desktop unmuted autoplay blocked — try muted
-      }
-
-      try {
-        video.muted = true
-        await video.play()
-        setVideoStarted(true)
-        setVideoMuted(true)
-        setAutoplayFailed(false)
-      } catch {
-        // Even muted autoplay failed — show play button
+    // If the video doesn't start on its own within 3s, show fallback button.
+    // This catches edge cases where autoplay is blocked entirely.
+    autoplayTimerRef.current = setTimeout(() => {
+      if (video.paused && !videoStarted) {
         setAutoplayFailed(true)
       }
-    }
-
-    // Wait for enough data to play
-    const onCanPlay = () => {
-      video.removeEventListener('canplay', onCanPlay)
-      attemptAutoplay()
-    }
-
-    // If video already has enough data, play immediately
-    if (video.readyState >= 3) {
-      attemptAutoplay()
-    } else {
-      video.addEventListener('canplay', onCanPlay)
-      // Safety timeout: if canplay never fires in 4s, show play button
-      autoplayTimerRef.current = setTimeout(() => {
-        video.removeEventListener('canplay', onCanPlay)
-        if (!videoRef.current?.paused) return // already playing
-        setAutoplayFailed(true)
-      }, 4000)
-    }
+    }, 3000)
 
     return () => {
-      video.removeEventListener('canplay', onCanPlay)
       if (autoplayTimerRef.current) clearTimeout(autoplayTimerRef.current)
     }
   }, [videoUrl])
 
-  // Tap anywhere on the video to unmute (iOS requires user gesture to unmute)
+  // Once autoplay starts (muted), try to unmute — works on desktop,
+  // silently ignored on iOS (user will tap the unmute button instead).
+  const handlePlay = useCallback(() => {
+    const video = videoRef.current
+    if (!video) return
+
+    setVideoStarted(true)
+    setVideoBuffering(false)
+    setAutoplayFailed(false)
+
+    // Try to unmute (desktop will accept, iOS will ignore)
+    if (video.muted) {
+      try {
+        video.muted = false
+        // If the browser paused it because of unmute, re-mute
+        setTimeout(() => {
+          if (video.paused && !video.ended) {
+            video.muted = true
+            video.play().catch(() => {})
+            setVideoMuted(true)
+          } else {
+            setVideoMuted(false)
+          }
+        }, 100)
+      } catch {
+        video.muted = true
+        setVideoMuted(true)
+      }
+    } else {
+      setVideoMuted(false)
+    }
+  }, [])
+
   const handleUnmute = useCallback(() => {
     const video = videoRef.current
     if (!video || !video.muted) return
@@ -132,7 +120,7 @@ export function EndingSequence() {
     setVideoMuted(false)
   }, [])
 
-  // Fallback play button handler — only shows if autoplay completely failed
+  // Fallback: user taps play button (only shown if autoplay failed)
   const handlePlayVideo = useCallback(async () => {
     const video = videoRef.current
     if (!video) return
@@ -157,9 +145,8 @@ export function EndingSequence() {
       setVideoMuted(true)
       setAutoplayFailed(false)
     } catch {
-      const errorCode = video.error?.code
       setVideoError(true)
-      setVideoErrorLabel(getMediaErrorLabel(errorCode))
+      setVideoErrorLabel(getMediaErrorLabel(video.error?.code))
       setVideoBuffering(false)
     }
   }, [])
@@ -183,7 +170,6 @@ export function EndingSequence() {
     canvas.width = 600
     canvas.height = 900
 
-    // Dark gradient background
     const grad = ctx.createLinearGradient(0, 0, 0, 900)
     grad.addColorStop(0, '#0a1520')
     grad.addColorStop(0.5, '#0c1825')
@@ -191,7 +177,6 @@ export function EndingSequence() {
     ctx.fillStyle = grad
     ctx.fillRect(0, 0, 600, 900)
 
-    // Load avatar
     const img = new Image()
     img.crossOrigin = 'anonymous'
     img.onload = () => {
@@ -200,7 +185,6 @@ export function EndingSequence() {
       const imgX = (600 - imgW) / 2
       ctx.drawImage(img, imgX, 150, imgW, imgH)
 
-      // Brand
       ctx.fillStyle = 'rgba(255,255,255,0.6)'
       ctx.font = '700 18px system-ui'
       ctx.textAlign = 'center'
@@ -264,7 +248,6 @@ export function EndingSequence() {
         background: '#080e14',
         animation: 'fadeIn 1s ease',
       }}>
-        {/* Brand video stage */}
         {stage === 'video' && (
           <div style={{
             width: '100%',
@@ -276,32 +259,18 @@ export function EndingSequence() {
             background: '#000',
           }}>
             <div style={{ position: 'relative', width: '100%', maxHeight: '85%', display: 'flex', justifyContent: 'center' }}>
+              {/* Key iOS attributes: autoPlay + muted + playsInline as HTML attrs.
+                  iOS WebKit respects these as declarative attrs but blocks
+                  programmatic video.play() without a user gesture. */}
               <video
                 ref={videoRef}
+                autoPlay
+                muted
                 playsInline
                 preload="auto"
-                onPlay={() => {
-                  setVideoStarted(true)
-                  setVideoBuffering(false)
-                  setAutoplayFailed(false)
-                }}
-                onCanPlay={() => {
-                  setVideoError(false)
-                  setVideoErrorLabel('unknown')
-                  setVideoBuffering(false)
-                }}
-                onWaiting={() => {
-                  setVideoBuffering(true)
-                }}
-                onPlaying={() => {
-                  setVideoBuffering(false)
-                }}
-                onError={() => {
-                  const errorCode = videoRef.current?.error?.code
-                  setVideoError(true)
-                  setVideoErrorLabel(getMediaErrorLabel(errorCode))
-                  setVideoBuffering(false)
-                }}
+                onPlay={handlePlay}
+                onWaiting={() => setVideoBuffering(true)}
+                onPlaying={() => setVideoBuffering(false)}
                 onStalled={() => {
                   if (stallTimerRef.current) clearTimeout(stallTimerRef.current)
                   setVideoBuffering(true)
@@ -328,7 +297,7 @@ export function EndingSequence() {
                 <source src={videoUrl} type="video/mp4" />
               </video>
 
-              {/* Tap to unmute overlay — shows when autoplaying muted (iPhone) */}
+              {/* Tap to unmute — shows when autoplaying muted on iPhone */}
               {videoStarted && videoMuted && !videoError && (
                 <div
                   onClick={handleUnmute}
@@ -354,9 +323,9 @@ export function EndingSequence() {
                     animation: 'fadeIn 0.5s ease',
                   }}>
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.9)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <line x1="1" y1="1" x2="23" y2="23" />
-                      <path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6" />
-                      <path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2c0 .76-.12 1.5-.34 2.18" />
+                      <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+                      <line x1="23" y1="9" x2="17" y2="15" />
+                      <line x1="17" y1="9" x2="23" y2="15" />
                     </svg>
                     <span style={{
                       color: 'rgba(255,255,255,0.9)',
@@ -370,7 +339,7 @@ export function EndingSequence() {
                 </div>
               )}
 
-              {/* Buffering spinner overlay */}
+              {/* Buffering spinner */}
               {videoBuffering && videoStarted && (
                 <div style={{
                   position: 'absolute',
@@ -483,7 +452,6 @@ export function EndingSequence() {
           </div>
         )}
 
-        {/* Reward stage */}
         {stage === 'reward' && (
           <div style={{
             display: 'flex',
@@ -582,7 +550,6 @@ export function EndingSequence() {
               REPLAY
             </button>
 
-            {/* Artist credit */}
             <a
               href="https://instagram.com/amelielolie"
               target="_blank"
