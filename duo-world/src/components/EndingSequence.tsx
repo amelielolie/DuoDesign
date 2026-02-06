@@ -27,12 +27,16 @@ export function EndingSequence() {
   const [cardImage, setCardImage] = useState<string | null>(null)
   const [videoUrl, setVideoUrl] = useState(createVideoUrl)
   const [videoStarted, setVideoStarted] = useState(false)
+  const [videoMuted, setVideoMuted] = useState(true)
+  const [autoplayFailed, setAutoplayFailed] = useState(false)
   const [videoError, setVideoError] = useState(false)
   const [videoErrorLabel, setVideoErrorLabel] = useState<string>('unknown')
   const [videoBuffering, setVideoBuffering] = useState(false)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const videoRef = useRef<HTMLVideoElement>(null)
   const stallTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const autoplayTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const hasAttemptedUnmute = useRef(false)
 
   // Reset state when entering the ending phase
   useEffect(() => {
@@ -40,9 +44,12 @@ export function EndingSequence() {
     setStage('video')
     setVideoUrl(createVideoUrl())
     setVideoStarted(false)
+    setVideoMuted(true)
+    setAutoplayFailed(false)
     setVideoError(false)
     setVideoErrorLabel('unknown')
     setVideoBuffering(false)
+    hasAttemptedUnmute.current = false
 
     // Generate share card while video plays
     const cardTimer = setTimeout(() => generateCard(), 1000)
@@ -50,44 +57,105 @@ export function EndingSequence() {
     return () => {
       clearTimeout(cardTimer)
       if (stallTimerRef.current) clearTimeout(stallTimerRef.current)
+      if (autoplayTimerRef.current) clearTimeout(autoplayTimerRef.current)
     }
   }, [phase])
 
-  // Reload video when URL changes (fixes load() timing race).
-  // With <source>, React updates the src attribute on the child element,
-  // then this effect calls load() so Safari picks up the new source.
+  // Reload video when URL changes and attempt autoplay.
+  // Strategy: autoplay muted (works everywhere), then try to unmute.
   useEffect(() => {
     const video = videoRef.current
     if (!video) return
     video.setAttribute('playsinline', 'true')
     video.setAttribute('webkit-playsinline', 'true')
-    // Force Safari to re-evaluate the <source> element
+    video.muted = true
     video.load()
+
+    hasAttemptedUnmute.current = false
+
+    // After load, try autoplay
+    const attemptAutoplay = async () => {
+      try {
+        // Try unmuted first (works on desktop)
+        video.muted = false
+        await video.play()
+        setVideoStarted(true)
+        setVideoMuted(false)
+        setAutoplayFailed(false)
+        return
+      } catch {
+        // Desktop unmuted autoplay blocked — try muted
+      }
+
+      try {
+        video.muted = true
+        await video.play()
+        setVideoStarted(true)
+        setVideoMuted(true)
+        setAutoplayFailed(false)
+      } catch {
+        // Even muted autoplay failed — show play button
+        setAutoplayFailed(true)
+      }
+    }
+
+    // Wait for enough data to play
+    const onCanPlay = () => {
+      video.removeEventListener('canplay', onCanPlay)
+      attemptAutoplay()
+    }
+
+    // If video already has enough data, play immediately
+    if (video.readyState >= 3) {
+      attemptAutoplay()
+    } else {
+      video.addEventListener('canplay', onCanPlay)
+      // Safety timeout: if canplay never fires in 4s, show play button
+      autoplayTimerRef.current = setTimeout(() => {
+        video.removeEventListener('canplay', onCanPlay)
+        if (!videoRef.current?.paused) return // already playing
+        setAutoplayFailed(true)
+      }, 4000)
+    }
+
+    return () => {
+      video.removeEventListener('canplay', onCanPlay)
+      if (autoplayTimerRef.current) clearTimeout(autoplayTimerRef.current)
+    }
   }, [videoUrl])
 
+  // Tap anywhere on the video to unmute (iOS requires user gesture to unmute)
+  const handleUnmute = useCallback(() => {
+    const video = videoRef.current
+    if (!video || !video.muted) return
+    video.muted = false
+    setVideoMuted(false)
+  }, [])
+
+  // Fallback play button handler — only shows if autoplay completely failed
   const handlePlayVideo = useCallback(async () => {
     const video = videoRef.current
     if (!video) return
 
     setVideoBuffering(true)
 
-    const tryPlay = async (muted: boolean) => {
-      video.muted = muted
+    try {
+      video.muted = false
       await video.play()
       setVideoStarted(true)
-      setVideoError(false)
-      setVideoErrorLabel('unknown')
-    }
-
-    try {
-      await tryPlay(false)
+      setVideoMuted(false)
+      setAutoplayFailed(false)
       return
     } catch {
-      // iOS often rejects unmuted play even with user gesture — fall back to muted.
+      // Fall back to muted
     }
 
     try {
-      await tryPlay(true)
+      video.muted = true
+      await video.play()
+      setVideoStarted(true)
+      setVideoMuted(true)
+      setAutoplayFailed(false)
     } catch {
       const errorCode = video.error?.code
       setVideoError(true)
@@ -99,6 +167,8 @@ export function EndingSequence() {
   const retryVideo = useCallback(() => {
     setVideoUrl(createVideoUrl())
     setVideoStarted(false)
+    setVideoMuted(true)
+    setAutoplayFailed(false)
     setVideoError(false)
     setVideoErrorLabel('unknown')
     setVideoBuffering(false)
@@ -208,12 +278,12 @@ export function EndingSequence() {
             <div style={{ position: 'relative', width: '100%', maxHeight: '85%', display: 'flex', justifyContent: 'center' }}>
               <video
                 ref={videoRef}
-                controls
                 playsInline
                 preload="auto"
                 onPlay={() => {
                   setVideoStarted(true)
                   setVideoBuffering(false)
+                  setAutoplayFailed(false)
                 }}
                 onCanPlay={() => {
                   setVideoError(false)
@@ -221,7 +291,6 @@ export function EndingSequence() {
                   setVideoBuffering(false)
                 }}
                 onWaiting={() => {
-                  // iOS fires waiting when buffering mid-playback
                   setVideoBuffering(true)
                 }}
                 onPlaying={() => {
@@ -234,8 +303,6 @@ export function EndingSequence() {
                   setVideoBuffering(false)
                 }}
                 onStalled={() => {
-                  // stalled is NOT an error — it means the browser is trying to fetch data.
-                  // Only escalate to error if it persists for 8+ seconds without recovery.
                   if (stallTimerRef.current) clearTimeout(stallTimerRef.current)
                   setVideoBuffering(true)
                   stallTimerRef.current = setTimeout(() => {
@@ -261,6 +328,48 @@ export function EndingSequence() {
                 <source src={videoUrl} type="video/mp4" />
               </video>
 
+              {/* Tap to unmute overlay — shows when autoplaying muted (iPhone) */}
+              {videoStarted && videoMuted && !videoError && (
+                <div
+                  onClick={handleUnmute}
+                  style={{
+                    position: 'absolute',
+                    inset: 0,
+                    display: 'flex',
+                    alignItems: 'flex-end',
+                    justifyContent: 'center',
+                    paddingBottom: '12%',
+                    cursor: 'pointer',
+                  }}
+                >
+                  <div style={{
+                    background: 'rgba(0,0,0,0.55)',
+                    backdropFilter: 'blur(6px)',
+                    WebkitBackdropFilter: 'blur(6px)',
+                    borderRadius: '999px',
+                    padding: '0.5rem 1.1rem',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.4rem',
+                    animation: 'fadeIn 0.5s ease',
+                  }}>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.9)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <line x1="1" y1="1" x2="23" y2="23" />
+                      <path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6" />
+                      <path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2c0 .76-.12 1.5-.34 2.18" />
+                    </svg>
+                    <span style={{
+                      color: 'rgba(255,255,255,0.9)',
+                      fontSize: '0.65rem',
+                      fontWeight: 600,
+                      letterSpacing: '0.1em',
+                    }}>
+                      TAP TO UNMUTE
+                    </span>
+                  </div>
+                </div>
+              )}
+
               {/* Buffering spinner overlay */}
               {videoBuffering && videoStarted && (
                 <div style={{
@@ -284,7 +393,8 @@ export function EndingSequence() {
               )}
             </div>
 
-            {!videoStarted && !videoError && (
+            {/* Fallback play button — only if autoplay completely failed */}
+            {autoplayFailed && !videoStarted && !videoError && (
               <button
                 onClick={handlePlayVideo}
                 style={{
@@ -490,7 +600,6 @@ export function EndingSequence() {
         )}
       </div>
 
-      {/* Spinner keyframes for buffering overlay */}
       <style>{`
         @keyframes videoSpin {
           to { transform: rotate(360deg); }
