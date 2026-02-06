@@ -7,12 +7,17 @@ export function EndingSequence() {
   const reset = useGameStore((s) => s.reset)
   const [stage, setStage] = useState<'video' | 'reward'>('video')
   const [cardImage, setCardImage] = useState<string | null>(null)
+  const [videoStarted, setVideoStarted] = useState(false)
+  const [videoError, setVideoError] = useState(false)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const videoRef = useRef<HTMLVideoElement>(null)
 
   useEffect(() => {
     if (phase !== 'ending') return
     setStage('video')
+    setVideoStarted(false)
+    setVideoError(false)
+    videoRef.current?.load()
 
     // Generate share card while video plays
     const cardTimer = setTimeout(() => generateCard(), 1000)
@@ -21,6 +26,30 @@ export function EndingSequence() {
       clearTimeout(cardTimer)
     }
   }, [phase, setPhase])
+
+  const handlePlayVideo = useCallback(async () => {
+    const video = videoRef.current
+    if (!video) return
+
+    try {
+      video.muted = false
+      await video.play()
+      setVideoStarted(true)
+      setVideoError(false)
+      return
+    } catch {
+      // iOS may still require muted first-play depending on media state.
+    }
+
+    try {
+      video.muted = true
+      await video.play()
+      setVideoStarted(true)
+      setVideoError(false)
+    } catch {
+      setVideoError(true)
+    }
+  }, [])
 
   const generateCard = useCallback(() => {
     const canvas = canvasRef.current
@@ -127,7 +156,10 @@ export function EndingSequence() {
               ref={videoRef}
               controls
               playsInline
-              preload="auto"
+              preload="metadata"
+              onPlay={() => setVideoStarted(true)}
+              onError={() => setVideoError(true)}
+              onStalled={() => setVideoError(true)}
               onEnded={() => {
                 setStage('reward')
                 setPhase('reward')
@@ -141,6 +173,37 @@ export function EndingSequence() {
             >
               <source src="/DUO_VIDEO.mp4?v=3" type="video/mp4" />
             </video>
+
+            {!videoStarted && (
+              <button
+                onClick={handlePlayVideo}
+                style={{
+                  marginTop: '1rem',
+                  background: '#fff',
+                  color: '#0a0a0a',
+                  border: 'none',
+                  borderRadius: '999px',
+                  padding: '0.7rem 1.4rem',
+                  fontSize: '0.7rem',
+                  letterSpacing: '0.11em',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                }}
+              >
+                PLAY VIDEO
+              </button>
+            )}
+
+            {videoError && (
+              <div style={{
+                marginTop: '0.8rem',
+                color: 'rgba(255,255,255,0.65)',
+                fontSize: '0.68rem',
+                letterSpacing: '0.05em',
+              }}>
+                Video failed to load on this connection. You can skip.
+              </div>
+            )}
 
             <button
               onClick={() => {

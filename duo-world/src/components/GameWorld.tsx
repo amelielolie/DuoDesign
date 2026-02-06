@@ -30,6 +30,13 @@ const FROZEN_BILLS = [
   { trigger: 0.93, y: 35 },
 ]
 
+const HORIZONTAL_ACCEL_SMOOTHING = 0.2
+const HORIZONTAL_DECAY = 0.82
+const FIRST_JUMP_VELOCITY = 18
+const DOUBLE_JUMP_VELOCITY = 15
+const GRAVITY = 1.55
+const VERTICAL_DAMPING = 0.985
+
 export function GameWorld() {
   const phase = useGameStore((s) => s.phase)
   const worldX = useGameStore((s) => s.worldX)
@@ -38,6 +45,7 @@ export function GameWorld() {
   const setDirection = useGameStore((s) => s.setDirection)
   const setJumping = useGameStore((s) => s.setJumping)
   const setJumpY = useGameStore((s) => s.setJumpY)
+  const setJumpCount = useGameStore((s) => s.setJumpCount)
   const setCurrentZone = useGameStore((s) => s.setCurrentZone)
   const triggerEnding = useGameStore((s) => s.triggerEnding)
   const endingTriggered = useGameStore((s) => s.endingTriggered)
@@ -45,6 +53,8 @@ export function GameWorld() {
   const direction = useGameStore((s) => s.direction)
   const jumping = useGameStore((s) => s.jumping)
   const jumpY = useGameStore((s) => s.jumpY)
+  const jumpCount = useGameStore((s) => s.jumpCount)
+  const maxJumps = useGameStore((s) => s.maxJumps)
   const currentZone = useGameStore((s) => s.currentZone)
   const collectedBills = useGameStore((s) => s.collectedBills)
   const collectBill = useGameStore((s) => s.collectBill)
@@ -54,8 +64,12 @@ export function GameWorld() {
   const worldXRef = useRef(0)
   const containerRef = useRef<HTMLDivElement>(null)
   const stripRef = useRef<HTMLDivElement>(null)
-  const jumpPhaseRef = useRef(0)
+  const velocityRef = useRef(0)
+  const jumpVelocityRef = useRef(0)
+  const jumpYRef = useRef(0)
   const isJumpingRef = useRef(false)
+  const jumpCountRef = useRef(0)
+  const walkingRef = useRef(false)
   const touchStartY = useRef(0)
   const [maxScroll, setMaxScroll] = useState(0)
   const [collectEffects, setCollectEffects] = useState<Array<{ id: number; x: number; y: number }>>([])
@@ -65,6 +79,8 @@ export function GameWorld() {
   const effectIdRef = useRef(0)
 
   worldXRef.current = worldX
+  jumpYRef.current = jumpY
+  jumpCountRef.current = jumpCount
 
   // Character entrance animation
   useEffect(() => {
@@ -137,29 +153,63 @@ export function GameWorld() {
     })
   }, [worldX, jumpY, collectedFrozenBills, collectBill])
 
+  const triggerJump = useCallback(() => {
+    if (jumpCountRef.current >= maxJumps) return
+    const boost = jumpCountRef.current === 0 ? FIRST_JUMP_VELOCITY : DOUBLE_JUMP_VELOCITY
+    isJumpingRef.current = true
+    jumpVelocityRef.current = boost
+    setJumping(true)
+    const nextJumpCount = jumpCountRef.current + 1
+    jumpCountRef.current = nextJumpCount
+    setJumpCount(nextJumpCount)
+  }, [maxJumps, setJumping, setJumpCount])
+
   // Animation loop
   const animate = useCallback(() => {
     if (directionRef.current !== 0) {
-      const delta = MOVEMENT.speed * directionRef.current
-      const newX = Math.max(0, Math.min(worldXRef.current + delta, 1))
+      const targetVelocity = MOVEMENT.speed * directionRef.current
+      velocityRef.current += (targetVelocity - velocityRef.current) * HORIZONTAL_ACCEL_SMOOTHING
+    } else {
+      velocityRef.current *= HORIZONTAL_DECAY
+      if (Math.abs(velocityRef.current) < 0.00001) {
+        velocityRef.current = 0
+      }
+    }
+
+    if (velocityRef.current !== 0) {
+      const newX = Math.max(0, Math.min(worldXRef.current + velocityRef.current, 1))
+      if (newX === 0 || newX === 1) {
+        velocityRef.current = 0
+      }
       setWorldX(newX)
     }
 
     if (isJumpingRef.current) {
-      jumpPhaseRef.current += 0.06
-      if (jumpPhaseRef.current >= Math.PI) {
-        jumpPhaseRef.current = 0
+      const nextJumpY = jumpYRef.current + jumpVelocityRef.current
+      jumpVelocityRef.current = (jumpVelocityRef.current - GRAVITY) * VERTICAL_DAMPING
+
+      if (nextJumpY <= 0 && jumpVelocityRef.current <= 0) {
         isJumpingRef.current = false
+        jumpVelocityRef.current = 0
+        jumpYRef.current = 0
+        jumpCountRef.current = 0
         setJumping(false)
         setJumpY(0)
+        setJumpCount(0)
       } else {
-        const y = Math.sin(jumpPhaseRef.current) * 100
-        setJumpY(y)
+        jumpYRef.current = Math.max(0, nextJumpY)
+        setJumpY(jumpYRef.current)
       }
     }
 
+    const moving = Math.abs(velocityRef.current) > 0.00008
+    if (moving !== walkingRef.current) {
+      walkingRef.current = moving
+      setWalking(moving)
+    }
+
     animFrameRef.current = requestAnimationFrame(animate)
-  }, [setWorldX, setJumping, setJumpY])
+  }, [setWorldX, setJumping, setJumpY, setJumpCount, setWalking])
 
   useEffect(() => {
     if (phase !== 'exploring') return
@@ -176,6 +226,7 @@ export function GameWorld() {
     const screenMid = window.innerWidth / 2
     const dir = e.clientX > screenMid ? 1 : -1
     directionRef.current = dir as 1 | -1
+    velocityRef.current *= 0.7
     setDirection(dir as 1 | -1)
     setWalking(true)
     touchStartY.current = e.clientY
@@ -195,16 +246,13 @@ export function GameWorld() {
     isTouchingRef.current = false
     if (touchStartY.current > 0 && 'clientY' in e) {
       const deltaY = touchStartY.current - e.clientY
-      if (deltaY > 50 && !isJumpingRef.current) {
-        isJumpingRef.current = true
-        jumpPhaseRef.current = 0
-        setJumping(true)
+      if (deltaY > 50) {
+        triggerJump()
       }
     }
     directionRef.current = 0
-    setWalking(false)
     touchStartY.current = 0
-  }, [setWalking, setJumping])
+  }, [triggerJump])
 
   useEffect(() => {
     const handler = (e: PointerEvent) => handlePointerUp(e)
@@ -222,22 +270,21 @@ export function GameWorld() {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'ArrowRight' || e.key === 'd') {
         directionRef.current = 1
+        velocityRef.current *= 0.7
         setDirection(1)
         setWalking(true)
       } else if (e.key === 'ArrowLeft' || e.key === 'a') {
         directionRef.current = -1
+        velocityRef.current *= 0.7
         setDirection(-1)
         setWalking(true)
-      } else if ((e.key === ' ' || e.key === 'ArrowUp') && !isJumpingRef.current) {
-        isJumpingRef.current = true
-        jumpPhaseRef.current = 0
-        setJumping(true)
+      } else if (e.key === ' ' || e.key === 'ArrowUp') {
+        triggerJump()
       }
     }
     const handleKeyUp = (e: KeyboardEvent) => {
       if (['ArrowRight', 'd', 'ArrowLeft', 'a'].includes(e.key)) {
         directionRef.current = 0
-        setWalking(false)
       }
     }
     window.addEventListener('keydown', handleKeyDown)
@@ -246,7 +293,7 @@ export function GameWorld() {
       window.removeEventListener('keydown', handleKeyDown)
       window.removeEventListener('keyup', handleKeyUp)
     }
-  }, [phase, setWalking, setDirection, setJumping])
+  }, [phase, setWalking, setDirection, triggerJump])
 
   // Measure the panoramic strip width for scrolling
   useEffect(() => {
@@ -606,7 +653,7 @@ export function GameWorld() {
           zIndex: 20,
         }}>
           <div>HOLD RIGHT TO WALK</div>
-          <div style={{ opacity: 0.6 }}>SWIPE UP TO JUMP</div>
+          <div style={{ opacity: 0.6 }}>SWIPE UP TWICE TO DOUBLE JUMP</div>
         </div>
       )}
 

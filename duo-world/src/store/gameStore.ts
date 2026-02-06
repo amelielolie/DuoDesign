@@ -12,6 +12,8 @@ interface GameState {
   direction: 1 | -1
   jumping: boolean
   jumpY: number
+  jumpCount: number
+  maxJumps: number
   photoSpotNearby: boolean
   endingTriggered: boolean
   collectedBills: Set<number>
@@ -25,6 +27,7 @@ interface GameState {
   setDirection: (dir: 1 | -1) => void
   setJumping: (jumping: boolean) => void
   setJumpY: (y: number) => void
+  setJumpCount: (count: number) => void
   setPhotoSpotNearby: (nearby: boolean) => void
   triggerEnding: () => void
   collectBill: (index: number) => void
@@ -41,6 +44,8 @@ export const useGameStore = create<GameState>((set) => ({
   direction: 1,
   jumping: false,
   jumpY: 0,
+  jumpCount: 0,
+  maxJumps: 2,
   photoSpotNearby: false,
   endingTriggered: false,
   collectedBills: new Set<number>(),
@@ -55,6 +60,7 @@ export const useGameStore = create<GameState>((set) => ({
   setDirection: (dir) => set({ direction: dir }),
   setJumping: (jumping) => set({ jumping }),
   setJumpY: (y) => set({ jumpY: y }),
+  setJumpCount: (count) => set({ jumpCount: count }),
   setPhotoSpotNearby: (nearby) => set({ photoSpotNearby: nearby }),
   triggerEnding: () => set({ endingTriggered: true, phase: 'ending' }),
   collectBill: (index) =>
@@ -74,6 +80,7 @@ export const useGameStore = create<GameState>((set) => ({
       direction: 1,
       jumping: false,
       jumpY: 0,
+      jumpCount: 0,
       photoSpotNearby: false,
       endingTriggered: false,
       collectedBills: new Set<number>(),
