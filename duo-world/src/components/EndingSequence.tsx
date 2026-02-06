@@ -53,12 +53,15 @@ export function EndingSequence() {
     }
   }, [phase])
 
-  // Reload video when URL changes (fixes load() timing race)
+  // Reload video when URL changes (fixes load() timing race).
+  // With <source>, React updates the src attribute on the child element,
+  // then this effect calls load() so Safari picks up the new source.
   useEffect(() => {
     const video = videoRef.current
     if (!video) return
     video.setAttribute('playsinline', 'true')
     video.setAttribute('webkit-playsinline', 'true')
+    // Force Safari to re-evaluate the <source> element
     video.load()
   }, [videoUrl])
 
@@ -208,7 +211,6 @@ export function EndingSequence() {
                 controls
                 playsInline
                 preload="auto"
-                src={videoUrl}
                 onPlay={() => {
                   setVideoStarted(true)
                   setVideoBuffering(false)
@@ -255,7 +257,9 @@ export function EndingSequence() {
                   aspectRatio: '3 / 4',
                   objectFit: 'contain',
                 }}
-              />
+              >
+                <source src={videoUrl} type="video/mp4" />
+              </video>
 
               {/* Buffering spinner overlay */}
               {videoBuffering && videoStarted && (
