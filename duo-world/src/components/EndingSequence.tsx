@@ -1,54 +1,104 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useGameStore } from '../store/gameStore'
 
+const VIDEO_VERSION = '4'
+const createVideoUrl = () => `/DUO_VIDEO.mp4?v=${VIDEO_VERSION}&cb=${Date.now()}`
+
+function getMediaErrorLabel(errorCode?: number): string {
+  switch (errorCode) {
+    case 1:
+      return 'aborted'
+    case 2:
+      return 'network'
+    case 3:
+      return 'decode'
+    case 4:
+      return 'unsupported-format'
+    default:
+      return 'unknown'
+  }
+}
+
 export function EndingSequence() {
   const phase = useGameStore((s) => s.phase)
   const setPhase = useGameStore((s) => s.setPhase)
   const reset = useGameStore((s) => s.reset)
   const [stage, setStage] = useState<'video' | 'reward'>('video')
   const [cardImage, setCardImage] = useState<string | null>(null)
+  const [videoUrl, setVideoUrl] = useState(createVideoUrl)
   const [videoStarted, setVideoStarted] = useState(false)
   const [videoError, setVideoError] = useState(false)
+  const [videoErrorLabel, setVideoErrorLabel] = useState<string>('unknown')
+  const [videoBuffering, setVideoBuffering] = useState(false)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const videoRef = useRef<HTMLVideoElement>(null)
+  const stallTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
+  // Reset state when entering the ending phase
   useEffect(() => {
     if (phase !== 'ending') return
     setStage('video')
+    setVideoUrl(createVideoUrl())
     setVideoStarted(false)
     setVideoError(false)
-    videoRef.current?.load()
+    setVideoErrorLabel('unknown')
+    setVideoBuffering(false)
 
     // Generate share card while video plays
     const cardTimer = setTimeout(() => generateCard(), 1000)
 
     return () => {
       clearTimeout(cardTimer)
+      if (stallTimerRef.current) clearTimeout(stallTimerRef.current)
     }
-  }, [phase, setPhase])
+  }, [phase])
+
+  // Reload video when URL changes (fixes load() timing race)
+  useEffect(() => {
+    const video = videoRef.current
+    if (!video) return
+    video.setAttribute('playsinline', 'true')
+    video.setAttribute('webkit-playsinline', 'true')
+    video.load()
+  }, [videoUrl])
 
   const handlePlayVideo = useCallback(async () => {
     const video = videoRef.current
     if (!video) return
 
-    try {
-      video.muted = false
+    setVideoBuffering(true)
+
+    const tryPlay = async (muted: boolean) => {
+      video.muted = muted
       await video.play()
       setVideoStarted(true)
       setVideoError(false)
-      return
-    } catch {
-      // iOS may still require muted first-play depending on media state.
+      setVideoErrorLabel('unknown')
     }
 
     try {
-      video.muted = true
-      await video.play()
-      setVideoStarted(true)
-      setVideoError(false)
+      await tryPlay(false)
+      return
     } catch {
-      setVideoError(true)
+      // iOS often rejects unmuted play even with user gesture — fall back to muted.
     }
+
+    try {
+      await tryPlay(true)
+    } catch {
+      const errorCode = video.error?.code
+      setVideoError(true)
+      setVideoErrorLabel(getMediaErrorLabel(errorCode))
+      setVideoBuffering(false)
+    }
+  }, [])
+
+  const retryVideo = useCallback(() => {
+    setVideoUrl(createVideoUrl())
+    setVideoStarted(false)
+    setVideoError(false)
+    setVideoErrorLabel('unknown')
+    setVideoBuffering(false)
   }, [])
 
   const generateCard = useCallback(() => {
@@ -152,29 +202,85 @@ export function EndingSequence() {
             justifyContent: 'center',
             background: '#000',
           }}>
-            <video
-              ref={videoRef}
-              controls
-              playsInline
-              preload="metadata"
-              onPlay={() => setVideoStarted(true)}
-              onError={() => setVideoError(true)}
-              onStalled={() => setVideoError(true)}
-              onEnded={() => {
-                setStage('reward')
-                setPhase('reward')
-              }}
-              style={{
-                width: '100%',
-                maxHeight: '85%',
-                aspectRatio: '3 / 4',
-                objectFit: 'contain',
-              }}
-            >
-              <source src="/DUO_VIDEO.mp4?v=3" type="video/mp4" />
-            </video>
+            <div style={{ position: 'relative', width: '100%', maxHeight: '85%', display: 'flex', justifyContent: 'center' }}>
+              <video
+                ref={videoRef}
+                controls
+                playsInline
+                preload="auto"
+                src={videoUrl}
+                onPlay={() => {
+                  setVideoStarted(true)
+                  setVideoBuffering(false)
+                }}
+                onCanPlay={() => {
+                  setVideoError(false)
+                  setVideoErrorLabel('unknown')
+                  setVideoBuffering(false)
+                }}
+                onWaiting={() => {
+                  // iOS fires waiting when buffering mid-playback
+                  setVideoBuffering(true)
+                }}
+                onPlaying={() => {
+                  setVideoBuffering(false)
+                }}
+                onError={() => {
+                  const errorCode = videoRef.current?.error?.code
+                  setVideoError(true)
+                  setVideoErrorLabel(getMediaErrorLabel(errorCode))
+                  setVideoBuffering(false)
+                }}
+                onStalled={() => {
+                  // stalled is NOT an error — it means the browser is trying to fetch data.
+                  // Only escalate to error if it persists for 8+ seconds without recovery.
+                  if (stallTimerRef.current) clearTimeout(stallTimerRef.current)
+                  setVideoBuffering(true)
+                  stallTimerRef.current = setTimeout(() => {
+                    const video = videoRef.current
+                    if (video && video.readyState < 3 && !video.paused) {
+                      setVideoError(true)
+                      setVideoErrorLabel('network')
+                    }
+                    setVideoBuffering(false)
+                  }, 8000)
+                }}
+                onEnded={() => {
+                  setStage('reward')
+                  setPhase('reward')
+                }}
+                style={{
+                  width: '100%',
+                  maxHeight: '85vh',
+                  aspectRatio: '3 / 4',
+                  objectFit: 'contain',
+                }}
+              />
 
-            {!videoStarted && (
+              {/* Buffering spinner overlay */}
+              {videoBuffering && videoStarted && (
+                <div style={{
+                  position: 'absolute',
+                  inset: 0,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  background: 'rgba(0,0,0,0.35)',
+                  pointerEvents: 'none',
+                }}>
+                  <div style={{
+                    width: '40px',
+                    height: '40px',
+                    border: '3px solid rgba(255,255,255,0.2)',
+                    borderTopColor: '#fff',
+                    borderRadius: '50%',
+                    animation: 'videoSpin 0.8s linear infinite',
+                  }} />
+                </div>
+              )}
+            </div>
+
+            {!videoStarted && !videoError && (
               <button
                 onClick={handlePlayVideo}
                 style={{
@@ -190,19 +296,57 @@ export function EndingSequence() {
                   cursor: 'pointer',
                 }}
               >
-                PLAY VIDEO
+                {videoBuffering ? 'LOADING...' : 'PLAY VIDEO'}
               </button>
             )}
 
             {videoError && (
-              <div style={{
-                marginTop: '0.8rem',
-                color: 'rgba(255,255,255,0.65)',
-                fontSize: '0.68rem',
-                letterSpacing: '0.05em',
-              }}>
-                Video failed to load on this connection. You can skip.
-              </div>
+              <>
+                <div style={{
+                  marginTop: '0.8rem',
+                  color: 'rgba(255,255,255,0.72)',
+                  fontSize: '0.68rem',
+                  letterSpacing: '0.05em',
+                  textAlign: 'center',
+                }}>
+                  Video playback failed ({videoErrorLabel}).
+                </div>
+                <div style={{
+                  marginTop: '0.55rem',
+                  display: 'flex',
+                  gap: '0.6rem',
+                  alignItems: 'center',
+                }}>
+                  <button
+                    onClick={retryVideo}
+                    style={{
+                      background: 'rgba(255,255,255,0.16)',
+                      color: '#fff',
+                      border: '1px solid rgba(255,255,255,0.35)',
+                      borderRadius: '999px',
+                      padding: '0.48rem 0.95rem',
+                      fontSize: '0.62rem',
+                      letterSpacing: '0.08em',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    RETRY
+                  </button>
+                  <a
+                    href={videoUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{
+                      color: 'rgba(255,255,255,0.85)',
+                      fontSize: '0.62rem',
+                      letterSpacing: '0.08em',
+                      textDecoration: 'underline',
+                    }}
+                  >
+                    OPEN IN NATIVE PLAYER
+                  </a>
+                </div>
+              </>
             )}
 
             <button
@@ -341,6 +485,13 @@ export function EndingSequence() {
           </div>
         )}
       </div>
+
+      {/* Spinner keyframes for buffering overlay */}
+      <style>{`
+        @keyframes videoSpin {
+          to { transform: rotate(360deg); }
+        }
+      `}</style>
     </>
   )
 }

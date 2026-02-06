@@ -30,6 +30,18 @@ const FROZEN_BILLS = [
   { trigger: 0.93, y: 35 },
 ]
 
+// Preload the ending video into browser cache when player approaches the end
+let videoPreloaded = false
+function preloadEndingVideo() {
+  if (videoPreloaded) return
+  videoPreloaded = true
+  const link = document.createElement('link')
+  link.rel = 'prefetch'
+  link.as = 'video'
+  link.href = '/DUO_VIDEO.mp4?v=4'
+  document.head.appendChild(link)
+}
+
 const HORIZONTAL_ACCEL_SMOOTHING = 0.2
 const HORIZONTAL_DECAY = 0.82
 const FIRST_JUMP_VELOCITY = 18
@@ -97,6 +109,11 @@ export function GameWorld() {
     else if (worldX >= 0.5) zone = 'rain-corridor'
     else if (worldX >= 0.25) zone = 'open-plaza'
     setCurrentZone(zone)
+
+    // Start preloading the ending video once the player is in the final stretch
+    if (worldX >= 0.70) {
+      preloadEndingVideo()
+    }
 
     if (worldX >= ENDING_TRIGGER && !endingTriggered) {
       triggerEnding()

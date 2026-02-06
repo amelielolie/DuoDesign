@@ -25,9 +25,12 @@ server {
             video/webm webm;
             video/ogg ogg;
         }
-        # no-store prevents Cloudflare from caching, preserving range requests
-        add_header Cache-Control "no-store" always;
+        # Short TTL allows same-session cache hits while preventing stale CDN copies.
+        # no-transform is critical — stops Cloudflare from re-encoding the mp4,
+        # which breaks iOS Safari byte-range (HTTP 206) playback.
+        add_header Cache-Control "public, max-age=300, no-transform" always;
         add_header Accept-Ranges bytes always;
+        gzip off;
         etag off;
     }
 }
