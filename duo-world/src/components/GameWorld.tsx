@@ -61,9 +61,18 @@ export function GameWorld() {
   const [collectEffects, setCollectEffects] = useState<Array<{ id: number; x: number; y: number }>>([])
   const [iceBreakEffects, setIceBreakEffects] = useState<Array<{ id: number; x: number; y: number }>>([])
   const [collectedFrozenBills, setCollectedFrozenBills] = useState<Set<number>>(new Set())
+  const [entered, setEntered] = useState(false)
   const effectIdRef = useRef(0)
 
   worldXRef.current = worldX
+
+  // Character entrance animation
+  useEffect(() => {
+    if (phase === 'exploring' && !entered) {
+      const timer = setTimeout(() => setEntered(true), 1000)
+      return () => clearTimeout(timer)
+    }
+  }, [phase, entered])
 
   // Determine current zone and trigger ending
   useEffect(() => {
@@ -566,8 +575,12 @@ export function GameWorld() {
             : 'url(/avatars/sprite-idle-clean.png)',
         backgroundSize: '300% 300%',
         backgroundPosition: (!walking && !jumping) ? '0% 0%' : undefined,
-        animation: (walking || jumping) ? 'spriteWalk 0.8s steps(1) infinite' : undefined,
-        transform: direction === -1 ? 'scaleX(-1)' : undefined,
+        animation: !entered
+          ? 'characterEnter 0.9s cubic-bezier(0.22, 1, 0.36, 1) forwards'
+          : (walking || jumping) ? 'spriteWalk 0.8s steps(1) infinite' : undefined,
+        transform: entered ? (direction === -1 ? 'scaleX(-1)' : undefined) : undefined,
+        // CSS variable for entrance animation direction
+        ...(!entered ? { '--char-dir': direction === -1 ? -1 : 1 } as React.CSSProperties : {}),
         filter: 'drop-shadow(0 2px 10px rgba(0,0,0,0.6))',
         zIndex: 10,
       }} />

@@ -7,14 +7,12 @@ export function EndingSequence() {
   const reset = useGameStore((s) => s.reset)
   const [stage, setStage] = useState<'video' | 'reward'>('video')
   const [cardImage, setCardImage] = useState<string | null>(null)
-  const [videoPlaying, setVideoPlaying] = useState(false)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const videoRef = useRef<HTMLVideoElement>(null)
 
   useEffect(() => {
     if (phase !== 'ending') return
     setStage('video')
-    setVideoPlaying(false)
 
     // Generate share card while video plays
     const cardTimer = setTimeout(() => generateCard(), 1000)
@@ -23,32 +21,6 @@ export function EndingSequence() {
       clearTimeout(cardTimer)
     }
   }, [phase, setPhase])
-
-  // Tap to play video (the only reliable way on iOS)
-  const handlePlayVideo = useCallback(() => {
-    const video = videoRef.current
-    if (!video || videoPlaying) return
-
-    // Try with sound first, fall back to muted
-    video.muted = false
-    const tryPlay = video.play()
-    if (tryPlay) {
-      tryPlay.then(() => {
-        setVideoPlaying(true)
-      }).catch(() => {
-        video.muted = true
-        video.play().then(() => {
-          setVideoPlaying(true)
-        }).catch(() => {
-          setStage('reward')
-          setPhase('reward')
-        })
-      })
-    } else {
-      // Old browsers where play() doesn't return a promise
-      setVideoPlaying(true)
-    }
-  }, [videoPlaying, setPhase])
 
   const generateCard = useCallback(() => {
     const canvas = canvasRef.current
@@ -142,21 +114,18 @@ export function EndingSequence() {
       }}>
         {/* Brand video stage */}
         {stage === 'video' && (
-          <div
-            onClick={handlePlayVideo}
-            style={{
-              width: '100%',
-              height: '100%',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              background: '#000',
-              position: 'relative',
-              cursor: 'pointer',
-            }}
-          >
+          <div style={{
+            width: '100%',
+            height: '100%',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            background: '#000',
+          }}>
             <video
               ref={videoRef}
+              controls
               playsInline
               preload="auto"
               onEnded={() => {
@@ -165,7 +134,7 @@ export function EndingSequence() {
               }}
               style={{
                 width: '100%',
-                maxHeight: '100%',
+                maxHeight: '85%',
                 aspectRatio: '3 / 4',
                 objectFit: 'contain',
               }}
@@ -173,59 +142,23 @@ export function EndingSequence() {
               <source src="/DUO_VIDEO.mp4?v=2" type="video/mp4" />
             </video>
 
-            {/* Tap to play overlay */}
-            {!videoPlaying && (
-              <div style={{
-                position: 'absolute',
-                inset: 0,
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                justifyContent: 'center',
-                background: 'rgba(0,0,0,0.4)',
-              }}>
-                {/* Play button circle */}
-                <div style={{
-                  width: '72px',
-                  height: '72px',
-                  borderRadius: '50%',
-                  border: '2px solid rgba(255,255,255,0.8)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  marginBottom: '1rem',
-                }}>
-                  <svg width="28" height="28" viewBox="0 0 24 24" fill="#fff">
-                    <path d="M8 5v14l11-7z" />
-                  </svg>
-                </div>
-                <span style={{
-                  color: 'rgba(255,255,255,0.6)',
-                  fontSize: '0.7rem',
-                  letterSpacing: '0.15em',
-                }}>
-                  TAP TO PLAY
-                </span>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    setStage('reward')
-                    setPhase('reward')
-                  }}
-                  style={{
-                    marginTop: '2rem',
-                    background: 'none',
-                    border: 'none',
-                    color: 'rgba(255,255,255,0.3)',
-                    fontSize: '0.65rem',
-                    letterSpacing: '0.1em',
-                    cursor: 'pointer',
-                  }}
-                >
-                  SKIP
-                </button>
-              </div>
-            )}
+            <button
+              onClick={() => {
+                setStage('reward')
+                setPhase('reward')
+              }}
+              style={{
+                marginTop: '1rem',
+                background: 'none',
+                border: 'none',
+                color: 'rgba(255,255,255,0.4)',
+                fontSize: '0.7rem',
+                letterSpacing: '0.1em',
+                cursor: 'pointer',
+              }}
+            >
+              SKIP
+            </button>
           </div>
         )}
 
