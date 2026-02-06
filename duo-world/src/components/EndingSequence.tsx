@@ -7,16 +7,14 @@ export function EndingSequence() {
   const reset = useGameStore((s) => s.reset)
   const [stage, setStage] = useState<'video' | 'reward'>('video')
   const [cardImage, setCardImage] = useState<string | null>(null)
-  const [videoMuted, setVideoMuted] = useState(true)
-  const [showUnmuteHint, setShowUnmuteHint] = useState(true)
+  const [videoPlaying, setVideoPlaying] = useState(false)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const videoRef = useRef<HTMLVideoElement>(null)
 
   useEffect(() => {
     if (phase !== 'ending') return
     setStage('video')
-    setVideoMuted(true)
-    setShowUnmuteHint(true)
+    setVideoPlaying(false)
 
     // Generate share card while video plays
     const cardTimer = setTimeout(() => generateCard(), 1000)
@@ -26,13 +24,30 @@ export function EndingSequence() {
     }
   }, [phase, setPhase])
 
-  const handleUnmute = useCallback(() => {
-    if (videoRef.current) {
-      videoRef.current.muted = false
-      setVideoMuted(false)
-      setShowUnmuteHint(false)
-    }
-  }, [])
+  // Tap to play video (the only reliable way on iOS)
+  const handlePlayVideo = useCallback(() => {
+    const video = videoRef.current
+    if (!video || videoPlaying) return
+
+    video.muted = false
+    video.play().then(() => {
+      setVideoPlaying(true)
+    }).catch(() => {
+      // If unmuted play fails, try muted first then unmute
+      video.muted = true
+      video.play().then(() => {
+        setVideoPlaying(true)
+        // Try to unmute after a short delay
+        setTimeout(() => {
+          video.muted = false
+        }, 100)
+      }).catch(() => {
+        // Last resort: skip to reward
+        setStage('reward')
+        setPhase('reward')
+      })
+    })
+  }, [videoPlaying, setPhase])
 
   const generateCard = useCallback(() => {
     const canvas = canvasRef.current
@@ -127,10 +142,10 @@ export function EndingSequence() {
         {/* Brand video stage */}
         {stage === 'video' && (
           <div
-            onClick={handleUnmute}
+            onClick={handlePlayVideo}
             onTouchEnd={(e) => {
               e.preventDefault()
-              handleUnmute()
+              handlePlayVideo()
             }}
             style={{
               width: '100%',
@@ -145,9 +160,8 @@ export function EndingSequence() {
           >
             <video
               ref={videoRef}
-              autoPlay
-              muted
               playsInline
+              preload="auto"
               onEnded={() => {
                 setStage('reward')
                 setPhase('reward')
@@ -162,33 +176,38 @@ export function EndingSequence() {
               <source src="/DUO_VIDEO.mp4?v=2" type="video/mp4" />
             </video>
 
-            {/* Tap to unmute hint */}
-            {videoMuted && showUnmuteHint && (
+            {/* Tap to play overlay */}
+            {!videoPlaying && (
               <div style={{
                 position: 'absolute',
-                bottom: '10%',
-                left: '50%',
-                transform: 'translateX(-50%)',
-                background: 'rgba(0,0,0,0.6)',
-                borderRadius: '50px',
-                padding: '10px 20px',
+                inset: 0,
                 display: 'flex',
+                flexDirection: 'column',
                 alignItems: 'center',
-                gap: '8px',
-                animation: 'fadeIn 0.5s ease',
-                pointerEvents: 'none',
+                justifyContent: 'center',
+                background: 'rgba(0,0,0,0.4)',
               }}>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2">
-                  <path d="M11 5L6 9H2v6h4l5 4V5z" />
-                  <line x1="23" y1="9" x2="17" y2="15" />
-                  <line x1="17" y1="9" x2="23" y2="15" />
-                </svg>
-                <span style={{
-                  color: '#fff',
-                  fontSize: '0.7rem',
-                  letterSpacing: '0.1em',
+                {/* Play button circle */}
+                <div style={{
+                  width: '72px',
+                  height: '72px',
+                  borderRadius: '50%',
+                  border: '2px solid rgba(255,255,255,0.8)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  marginBottom: '1rem',
                 }}>
-                  TAP FOR SOUND
+                  <svg width="28" height="28" viewBox="0 0 24 24" fill="#fff">
+                    <path d="M8 5v14l11-7z" />
+                  </svg>
+                </div>
+                <span style={{
+                  color: 'rgba(255,255,255,0.6)',
+                  fontSize: '0.7rem',
+                  letterSpacing: '0.15em',
+                }}>
+                  TAP TO PLAY
                 </span>
               </div>
             )}
