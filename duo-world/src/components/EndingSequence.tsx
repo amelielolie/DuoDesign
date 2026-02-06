@@ -54,30 +54,15 @@ export function EndingSequence() {
     return () => clearTimeout(timer)
   }, [phase, videoUrl, videoStarted])
 
-  // When autoplay fires, try to unmute (desktop accepts, iOS ignores)
+  // Don't touch muted state here — on iOS, setting video.muted = false
+  // during autoplay kills playback entirely (no user gesture context).
+  // Just record that the video is playing; user taps "unmute" explicitly.
   const handlePlay = useCallback(() => {
     setVideoStarted(true)
     setAutoplayFailed(false)
     setVideoError(false)
-
     const video = videoRef.current
-    if (!video || !video.muted) {
-      setVideoMuted(false)
-      return
-    }
-
-    // Try unmuting — desktop will accept
-    video.muted = false
-    // Check if the browser killed playback due to unmute
-    setTimeout(() => {
-      if (video.paused && !video.ended) {
-        video.muted = true
-        video.play().catch(() => {})
-        setVideoMuted(true)
-      } else {
-        setVideoMuted(false)
-      }
-    }, 150)
+    setVideoMuted(video?.muted ?? true)
   }, [])
 
   const handleUnmute = useCallback(() => {
