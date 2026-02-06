@@ -10,56 +10,44 @@ export function EndingSequence() {
   const reset = useGameStore((s) => s.reset)
   const [stage, setStage] = useState<'video' | 'reward'>('video')
   const [cardImage, setCardImage] = useState<string | null>(null)
-  const [videoUrl, setVideoUrl] = useState(createVideoUrl)
+  // videoUrl is null until the ending phase — prevents premature requests
+  const [videoUrl, setVideoUrl] = useState<string | null>(null)
   const [videoStarted, setVideoStarted] = useState(false)
   const [videoMuted, setVideoMuted] = useState(true)
-  const [autoplayFailed, setAutoplayFailed] = useState(false)
+  const [showPlayButton, setShowPlayButton] = useState(false)
   const [videoError, setVideoError] = useState(false)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const videoRef = useRef<HTMLVideoElement>(null)
-  const autoplayTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  // Reset state when entering the ending phase
+  // Create video URL and reset state when entering ending phase.
+  // URL is created HERE only — not in useState — so the video element
+  // mounts exactly once with the correct src (no double-request).
   useEffect(() => {
     if (phase !== 'ending') return
     setStage('video')
     setVideoUrl(createVideoUrl())
     setVideoStarted(false)
     setVideoMuted(true)
-    setAutoplayFailed(false)
+    setShowPlayButton(false)
     setVideoError(false)
 
     const cardTimer = setTimeout(() => generateCard(), 1000)
-
-    // If autoplay hasn't kicked in within 3s, show the play button
-    autoplayTimerRef.current = setTimeout(() => {
-      setAutoplayFailed((prev) => {
-        // Only set if video hasn't started yet
-        return prev
-      })
-    }, 3000)
-
-    return () => {
-      clearTimeout(cardTimer)
-      if (autoplayTimerRef.current) clearTimeout(autoplayTimerRef.current)
-    }
+    return () => clearTimeout(cardTimer)
   }, [phase])
 
-  // 3s fallback: if video hasn't started, show play button
+  // If autoplay doesn't fire within 1.5s, show play button.
+  // Short timeout so iPhone users aren't staring at a black screen.
   useEffect(() => {
-    if (phase !== 'ending' || videoStarted) return
+    if (!videoUrl || videoStarted) return
     const timer = setTimeout(() => {
-      if (!videoStarted) setAutoplayFailed(true)
-    }, 3000)
+      if (!videoStarted) setShowPlayButton(true)
+    }, 1500)
     return () => clearTimeout(timer)
-  }, [phase, videoUrl, videoStarted])
+  }, [videoUrl, videoStarted])
 
-  // Don't touch muted state here — on iOS, setting video.muted = false
-  // during autoplay kills playback entirely (no user gesture context).
-  // Just record that the video is playing; user taps "unmute" explicitly.
   const handlePlay = useCallback(() => {
     setVideoStarted(true)
-    setAutoplayFailed(false)
+    setShowPlayButton(false)
     setVideoError(false)
     const video = videoRef.current
     setVideoMuted(video?.muted ?? true)
@@ -72,7 +60,7 @@ export function EndingSequence() {
     setVideoMuted(false)
   }, [])
 
-  // Fallback play button handler
+  // User taps play button (gesture context — works on iOS)
   const handlePlayVideo = useCallback(async () => {
     const video = videoRef.current
     if (!video) return
@@ -82,7 +70,7 @@ export function EndingSequence() {
       await video.play()
       setVideoStarted(true)
       setVideoMuted(false)
-      setAutoplayFailed(false)
+      setShowPlayButton(false)
       return
     } catch { /* fall back to muted */ }
 
@@ -91,7 +79,7 @@ export function EndingSequence() {
       await video.play()
       setVideoStarted(true)
       setVideoMuted(true)
-      setAutoplayFailed(false)
+      setShowPlayButton(false)
     } catch {
       setVideoError(true)
     }
@@ -101,7 +89,7 @@ export function EndingSequence() {
     setVideoUrl(createVideoUrl())
     setVideoStarted(false)
     setVideoMuted(true)
-    setAutoplayFailed(false)
+    setShowPlayButton(false)
     setVideoError(false)
   }, [])
 
@@ -170,6 +158,7 @@ export function EndingSequence() {
   const handleReplay = useCallback(() => {
     setStage('video')
     setCardImage(null)
+    setVideoUrl(null)
     reset()
   }, [reset])
 
@@ -200,37 +189,31 @@ export function EndingSequence() {
             background: '#000',
           }}>
             <div style={{ position: 'relative', width: '100%', maxHeight: '85%', display: 'flex', justifyContent: 'center' }}>
-              {/*
-                key={videoUrl} forces React to destroy and recreate the video
-                element on retry, avoiding the video.load() timing bug where
-                load() resets an already-autoplaying video.
+              {videoUrl && (
+                <video
+                  key={videoUrl}
+                  ref={videoRef}
+                  autoPlay
+                  muted
+                  playsInline
+                  preload="auto"
+                  onPlay={handlePlay}
+                  onEnded={() => {
+                    setStage('reward')
+                    setPhase('reward')
+                  }}
+                  style={{
+                    width: '100%',
+                    maxHeight: '85vh',
+                    aspectRatio: '3 / 4',
+                    objectFit: 'contain',
+                  }}
+                >
+                  <source src={videoUrl} type="video/mp4" />
+                </video>
+              )}
 
-                autoPlay + muted + playsInline as HTML attributes — iOS WebKit
-                respects these declaratively but blocks programmatic play().
-              */}
-              <video
-                key={videoUrl}
-                ref={videoRef}
-                autoPlay
-                muted
-                playsInline
-                preload="auto"
-                onPlay={handlePlay}
-                onEnded={() => {
-                  setStage('reward')
-                  setPhase('reward')
-                }}
-                style={{
-                  width: '100%',
-                  maxHeight: '85vh',
-                  aspectRatio: '3 / 4',
-                  objectFit: 'contain',
-                }}
-              >
-                <source src={videoUrl} type="video/mp4" />
-              </video>
-
-              {/* Tap to unmute — iPhone autoplays muted */}
+              {/* Tap to unmute — shows when playing muted (iPhone) */}
               {videoStarted && videoMuted && (
                 <div
                   onClick={handleUnmute}
@@ -273,8 +256,8 @@ export function EndingSequence() {
               )}
             </div>
 
-            {/* Fallback play button — only if autoplay didn't start within 3s */}
-            {autoplayFailed && !videoStarted && !videoError && (
+            {/* Play button — shows if autoplay didn't fire in 1.5s (iPhone) */}
+            {showPlayButton && !videoStarted && !videoError && (
               <button
                 onClick={handlePlayVideo}
                 style={{
@@ -288,6 +271,7 @@ export function EndingSequence() {
                   letterSpacing: '0.11em',
                   fontWeight: 700,
                   cursor: 'pointer',
+                  animation: 'fadeIn 0.4s ease',
                 }}
               >
                 PLAY VIDEO
@@ -326,19 +310,21 @@ export function EndingSequence() {
                   >
                     RETRY
                   </button>
-                  <a
-                    href={videoUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    style={{
-                      color: 'rgba(255,255,255,0.85)',
-                      fontSize: '0.62rem',
-                      letterSpacing: '0.08em',
-                      textDecoration: 'underline',
-                    }}
-                  >
-                    OPEN IN NATIVE PLAYER
-                  </a>
+                  {videoUrl && (
+                    <a
+                      href={videoUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{
+                        color: 'rgba(255,255,255,0.85)',
+                        fontSize: '0.62rem',
+                        letterSpacing: '0.08em',
+                        textDecoration: 'underline',
+                      }}
+                    >
+                      OPEN IN NATIVE PLAYER
+                    </a>
+                  )}
                 </div>
               </>
             )}
