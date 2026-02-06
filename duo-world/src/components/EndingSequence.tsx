@@ -4,21 +4,6 @@ import { useGameStore } from '../store/gameStore'
 const VIDEO_VERSION = '4'
 const createVideoUrl = () => `/DUO_VIDEO.mp4?v=${VIDEO_VERSION}&cb=${Date.now()}`
 
-function getMediaErrorLabel(errorCode?: number): string {
-  switch (errorCode) {
-    case 1:
-      return 'aborted'
-    case 2:
-      return 'network'
-    case 3:
-      return 'decode'
-    case 4:
-      return 'unsupported-format'
-    default:
-      return 'unknown'
-  }
-}
-
 export function EndingSequence() {
   const phase = useGameStore((s) => s.phase)
   const setPhase = useGameStore((s) => s.setPhase)
@@ -30,11 +15,8 @@ export function EndingSequence() {
   const [videoMuted, setVideoMuted] = useState(true)
   const [autoplayFailed, setAutoplayFailed] = useState(false)
   const [videoError, setVideoError] = useState(false)
-  const [videoErrorLabel, setVideoErrorLabel] = useState<string>('unknown')
-  const [videoBuffering, setVideoBuffering] = useState(false)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const videoRef = useRef<HTMLVideoElement>(null)
-  const stallTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const autoplayTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // Reset state when entering the ending phase
@@ -46,86 +28,69 @@ export function EndingSequence() {
     setVideoMuted(true)
     setAutoplayFailed(false)
     setVideoError(false)
-    setVideoErrorLabel('unknown')
-    setVideoBuffering(false)
 
-    // Generate share card while video plays
     const cardTimer = setTimeout(() => generateCard(), 1000)
+
+    // If autoplay hasn't kicked in within 3s, show the play button
+    autoplayTimerRef.current = setTimeout(() => {
+      setAutoplayFailed((prev) => {
+        // Only set if video hasn't started yet
+        return prev
+      })
+    }, 3000)
 
     return () => {
       clearTimeout(cardTimer)
-      if (stallTimerRef.current) clearTimeout(stallTimerRef.current)
       if (autoplayTimerRef.current) clearTimeout(autoplayTimerRef.current)
     }
   }, [phase])
 
-  // When videoUrl changes, reload and let the HTML autoplay/muted attributes
-  // handle playback. iOS respects <video autoplay muted playsinline> as HTML
-  // attributes but blocks programmatic video.play() without a user gesture.
+  // 3s fallback: if video hasn't started, show play button
   useEffect(() => {
-    const video = videoRef.current
-    if (!video) return
-    video.load()
-
-    // If the video doesn't start on its own within 3s, show fallback button.
-    // This catches edge cases where autoplay is blocked entirely.
-    autoplayTimerRef.current = setTimeout(() => {
-      if (video.paused && !videoStarted) {
-        setAutoplayFailed(true)
-      }
+    if (phase !== 'ending' || videoStarted) return
+    const timer = setTimeout(() => {
+      if (!videoStarted) setAutoplayFailed(true)
     }, 3000)
+    return () => clearTimeout(timer)
+  }, [phase, videoUrl, videoStarted])
 
-    return () => {
-      if (autoplayTimerRef.current) clearTimeout(autoplayTimerRef.current)
-    }
-  }, [videoUrl])
-
-  // Once autoplay starts (muted), try to unmute — works on desktop,
-  // silently ignored on iOS (user will tap the unmute button instead).
+  // When autoplay fires, try to unmute (desktop accepts, iOS ignores)
   const handlePlay = useCallback(() => {
-    const video = videoRef.current
-    if (!video) return
-
     setVideoStarted(true)
-    setVideoBuffering(false)
     setAutoplayFailed(false)
+    setVideoError(false)
 
-    // Try to unmute (desktop will accept, iOS will ignore)
-    if (video.muted) {
-      try {
-        video.muted = false
-        // If the browser paused it because of unmute, re-mute
-        setTimeout(() => {
-          if (video.paused && !video.ended) {
-            video.muted = true
-            video.play().catch(() => {})
-            setVideoMuted(true)
-          } else {
-            setVideoMuted(false)
-          }
-        }, 100)
-      } catch {
-        video.muted = true
-        setVideoMuted(true)
-      }
-    } else {
+    const video = videoRef.current
+    if (!video || !video.muted) {
       setVideoMuted(false)
+      return
     }
+
+    // Try unmuting — desktop will accept
+    video.muted = false
+    // Check if the browser killed playback due to unmute
+    setTimeout(() => {
+      if (video.paused && !video.ended) {
+        video.muted = true
+        video.play().catch(() => {})
+        setVideoMuted(true)
+      } else {
+        setVideoMuted(false)
+      }
+    }, 150)
   }, [])
 
   const handleUnmute = useCallback(() => {
     const video = videoRef.current
-    if (!video || !video.muted) return
+    if (!video) return
     video.muted = false
     setVideoMuted(false)
   }, [])
 
-  // Fallback: user taps play button (only shown if autoplay failed)
+  // Fallback play button handler
   const handlePlayVideo = useCallback(async () => {
     const video = videoRef.current
     if (!video) return
-
-    setVideoBuffering(true)
 
     try {
       video.muted = false
@@ -134,9 +99,7 @@ export function EndingSequence() {
       setVideoMuted(false)
       setAutoplayFailed(false)
       return
-    } catch {
-      // Fall back to muted
-    }
+    } catch { /* fall back to muted */ }
 
     try {
       video.muted = true
@@ -146,8 +109,6 @@ export function EndingSequence() {
       setAutoplayFailed(false)
     } catch {
       setVideoError(true)
-      setVideoErrorLabel(getMediaErrorLabel(video.error?.code))
-      setVideoBuffering(false)
     }
   }, [])
 
@@ -157,8 +118,6 @@ export function EndingSequence() {
     setVideoMuted(true)
     setAutoplayFailed(false)
     setVideoError(false)
-    setVideoErrorLabel('unknown')
-    setVideoBuffering(false)
   }, [])
 
   const generateCard = useCallback(() => {
@@ -206,10 +165,7 @@ export function EndingSequence() {
 
     if (navigator.share) {
       try {
-        await navigator.share({
-          title: 'My Duo World Moment',
-          files: [file],
-        })
+        await navigator.share({ title: 'My Duo World Moment', files: [file] })
       } catch {
         downloadImage()
       }
@@ -259,30 +215,22 @@ export function EndingSequence() {
             background: '#000',
           }}>
             <div style={{ position: 'relative', width: '100%', maxHeight: '85%', display: 'flex', justifyContent: 'center' }}>
-              {/* Key iOS attributes: autoPlay + muted + playsInline as HTML attrs.
-                  iOS WebKit respects these as declarative attrs but blocks
-                  programmatic video.play() without a user gesture. */}
+              {/*
+                key={videoUrl} forces React to destroy and recreate the video
+                element on retry, avoiding the video.load() timing bug where
+                load() resets an already-autoplaying video.
+
+                autoPlay + muted + playsInline as HTML attributes — iOS WebKit
+                respects these declaratively but blocks programmatic play().
+              */}
               <video
+                key={videoUrl}
                 ref={videoRef}
                 autoPlay
                 muted
                 playsInline
                 preload="auto"
                 onPlay={handlePlay}
-                onWaiting={() => setVideoBuffering(true)}
-                onPlaying={() => setVideoBuffering(false)}
-                onStalled={() => {
-                  if (stallTimerRef.current) clearTimeout(stallTimerRef.current)
-                  setVideoBuffering(true)
-                  stallTimerRef.current = setTimeout(() => {
-                    const video = videoRef.current
-                    if (video && video.readyState < 3 && !video.paused) {
-                      setVideoError(true)
-                      setVideoErrorLabel('network')
-                    }
-                    setVideoBuffering(false)
-                  }, 8000)
-                }}
                 onEnded={() => {
                   setStage('reward')
                   setPhase('reward')
@@ -297,8 +245,8 @@ export function EndingSequence() {
                 <source src={videoUrl} type="video/mp4" />
               </video>
 
-              {/* Tap to unmute — shows when autoplaying muted on iPhone */}
-              {videoStarted && videoMuted && !videoError && (
+              {/* Tap to unmute — iPhone autoplays muted */}
+              {videoStarted && videoMuted && (
                 <div
                   onClick={handleUnmute}
                   style={{
@@ -338,31 +286,9 @@ export function EndingSequence() {
                   </div>
                 </div>
               )}
-
-              {/* Buffering spinner */}
-              {videoBuffering && videoStarted && (
-                <div style={{
-                  position: 'absolute',
-                  inset: 0,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  background: 'rgba(0,0,0,0.35)',
-                  pointerEvents: 'none',
-                }}>
-                  <div style={{
-                    width: '40px',
-                    height: '40px',
-                    border: '3px solid rgba(255,255,255,0.2)',
-                    borderTopColor: '#fff',
-                    borderRadius: '50%',
-                    animation: 'videoSpin 0.8s linear infinite',
-                  }} />
-                </div>
-              )}
             </div>
 
-            {/* Fallback play button — only if autoplay completely failed */}
+            {/* Fallback play button — only if autoplay didn't start within 3s */}
             {autoplayFailed && !videoStarted && !videoError && (
               <button
                 onClick={handlePlayVideo}
@@ -379,7 +305,7 @@ export function EndingSequence() {
                   cursor: 'pointer',
                 }}
               >
-                {videoBuffering ? 'LOADING...' : 'PLAY VIDEO'}
+                PLAY VIDEO
               </button>
             )}
 
@@ -392,7 +318,7 @@ export function EndingSequence() {
                   letterSpacing: '0.05em',
                   textAlign: 'center',
                 }}>
-                  Video playback failed ({videoErrorLabel}).
+                  Video failed to load.
                 </div>
                 <div style={{
                   marginTop: '0.55rem',
@@ -566,12 +492,6 @@ export function EndingSequence() {
           </div>
         )}
       </div>
-
-      <style>{`
-        @keyframes videoSpin {
-          to { transform: rotate(360deg); }
-        }
-      `}</style>
     </>
   )
 }
