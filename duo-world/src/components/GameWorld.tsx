@@ -1,6 +1,6 @@
 import { useEffect, useRef, useCallback, useState } from 'react'
 import { useGameStore } from '../store/gameStore'
-import { MOVEMENT, ENDING_TRIGGER } from '../utils/constants'
+import { MOVEMENT, ENDING_TRIGGER, PHOTO_SPOTS } from '../utils/constants'
 import { Particles } from './Particles'
 import type { ZoneId } from '../store/gameStore'
 
@@ -48,6 +48,9 @@ const FIRST_JUMP_VELOCITY = 18
 const DOUBLE_JUMP_VELOCITY = 15
 const GRAVITY = 1.55
 const VERTICAL_DAMPING = 0.985
+const CAMERA_LERP = 0.12
+const PHOTO_SPOT_THRESHOLD = 0.02
+const STREAK_TIMEOUT_MS = 1600
 
 export function GameWorld() {
   const phase = useGameStore((s) => s.phase)
@@ -58,6 +61,7 @@ export function GameWorld() {
   const setJumping = useGameStore((s) => s.setJumping)
   const setJumpY = useGameStore((s) => s.setJumpY)
   const setJumpCount = useGameStore((s) => s.setJumpCount)
+  const setPhotoSpotNearby = useGameStore((s) => s.setPhotoSpotNearby)
   const setCurrentZone = useGameStore((s) => s.setCurrentZone)
   const triggerEnding = useGameStore((s) => s.triggerEnding)
   const endingTriggered = useGameStore((s) => s.endingTriggered)
@@ -74,6 +78,7 @@ export function GameWorld() {
   const animFrameRef = useRef<number>(0)
   const directionRef = useRef<1 | -1 | 0>(0)
   const worldXRef = useRef(0)
+  const displayWorldXRef = useRef(0)
   const containerRef = useRef<HTMLDivElement>(null)
   const stripRef = useRef<HTMLDivElement>(null)
   const velocityRef = useRef(0)
@@ -82,8 +87,12 @@ export function GameWorld() {
   const isJumpingRef = useRef(false)
   const jumpCountRef = useRef(0)
   const walkingRef = useRef(false)
+  const streakRef = useRef(0)
+  const lastCollectAtRef = useRef(0)
   const touchStartY = useRef(0)
   const [maxScroll, setMaxScroll] = useState(0)
+  const [displayWorldX, setDisplayWorldX] = useState(0)
+  const [streak, setStreak] = useState(0)
   const [collectEffects, setCollectEffects] = useState<Array<{ id: number; x: number; y: number }>>([])
   const [iceBreakEffects, setIceBreakEffects] = useState<Array<{ id: number; x: number; y: number }>>([])
   const [collectedFrozenBills, setCollectedFrozenBills] = useState<Set<number>>(new Set())
@@ -91,6 +100,7 @@ export function GameWorld() {
   const effectIdRef = useRef(0)
 
   worldXRef.current = worldX
+  displayWorldXRef.current = displayWorldX
   jumpYRef.current = jumpY
   jumpCountRef.current = jumpCount
 
@@ -120,6 +130,52 @@ export function GameWorld() {
     }
   }, [worldX, setCurrentZone, endingTriggered, triggerEnding])
 
+  useEffect(() => {
+    if (phase === 'exploring' && worldX < 0.001) {
+      setDisplayWorldX(0)
+      displayWorldXRef.current = 0
+      streakRef.current = 0
+      setStreak(0)
+    }
+  }, [phase, worldX])
+
+  useEffect(() => {
+    if (phase !== 'exploring') {
+      setPhotoSpotNearby(false)
+      return
+    }
+    const nearSpot = PHOTO_SPOTS.some((spot) => (
+      Math.abs(worldX - spot.x) <= PHOTO_SPOT_THRESHOLD
+    ))
+    setPhotoSpotNearby(nearSpot)
+  }, [phase, worldX, setPhotoSpotNearby])
+
+  const triggerHaptic = useCallback((pattern: number | number[]) => {
+    if (!('vibrate' in navigator)) return
+    navigator.vibrate(pattern)
+  }, [])
+
+  const registerCollect = useCallback((icy: boolean) => {
+    const now = Date.now()
+    const comboActive = now - lastCollectAtRef.current < STREAK_TIMEOUT_MS
+    const nextStreak = comboActive ? streakRef.current + 1 : 1
+    lastCollectAtRef.current = now
+    streakRef.current = nextStreak
+    setStreak(nextStreak)
+    triggerHaptic(icy ? [12, 26, 14] : 16)
+  }, [triggerHaptic])
+
+  useEffect(() => {
+    if (streak === 0) return
+    const timer = setTimeout(() => {
+      if (Date.now() - lastCollectAtRef.current >= STREAK_TIMEOUT_MS) {
+        streakRef.current = 0
+        setStreak(0)
+      }
+    }, STREAK_TIMEOUT_MS + 120)
+    return () => clearTimeout(timer)
+  }, [streak, worldX])
+
   // Bill collision detection
   useEffect(() => {
     if (maxScroll === 0) return
@@ -136,6 +192,7 @@ export function GameWorld() {
         const charTop = charBottom + 28
         if (bill.y >= charBottom - 5 && bill.y <= charTop + 5) {
           collectBill(i)
+          registerCollect(false)
           const id = effectIdRef.current++
           setCollectEffects((prev) => [...prev, { id, x: billScreenX, y: bill.y }])
           setTimeout(() => {
@@ -144,7 +201,7 @@ export function GameWorld() {
         }
       }
     })
-  }, [worldX, jumpY, collectedBills, collectBill, maxScroll])
+  }, [worldX, jumpY, collectedBills, collectBill, registerCollect, maxScroll])
 
   // Frozen bill collision detection - screen-relative positioning
   useEffect(() => {
@@ -160,6 +217,7 @@ export function GameWorld() {
         if (bill.y >= charBottom - 10 && bill.y <= charTop + 10) {
           setCollectedFrozenBills(prev => new Set([...prev, i]))
           collectBill(100 + i)
+          registerCollect(true)
           const id = effectIdRef.current++
           setIceBreakEffects(prev => [...prev, { id, x: 45, y: bill.y }])
           setTimeout(() => {
@@ -168,18 +226,20 @@ export function GameWorld() {
         }
       }
     })
-  }, [worldX, jumpY, collectedFrozenBills, collectBill])
+  }, [worldX, jumpY, collectedFrozenBills, collectBill, registerCollect])
 
   const triggerJump = useCallback(() => {
     if (jumpCountRef.current >= maxJumps) return
-    const boost = jumpCountRef.current === 0 ? FIRST_JUMP_VELOCITY : DOUBLE_JUMP_VELOCITY
+    const isDoubleJump = jumpCountRef.current > 0
+    const boost = isDoubleJump ? DOUBLE_JUMP_VELOCITY : FIRST_JUMP_VELOCITY
     isJumpingRef.current = true
     jumpVelocityRef.current = boost
     setJumping(true)
     const nextJumpCount = jumpCountRef.current + 1
     jumpCountRef.current = nextJumpCount
     setJumpCount(nextJumpCount)
-  }, [maxJumps, setJumping, setJumpCount])
+    triggerHaptic(isDoubleJump ? [10, 18, 12] : 10)
+  }, [maxJumps, setJumping, setJumpCount, triggerHaptic])
 
   // Animation loop
   const animate = useCallback(() => {
@@ -217,6 +277,13 @@ export function GameWorld() {
         jumpYRef.current = Math.max(0, nextJumpY)
         setJumpY(jumpYRef.current)
       }
+    }
+
+    const targetDisplayX = worldXRef.current
+    const nextDisplayX = displayWorldXRef.current + (targetDisplayX - displayWorldXRef.current) * CAMERA_LERP
+    if (Math.abs(nextDisplayX - displayWorldXRef.current) > 0.00001) {
+      displayWorldXRef.current = nextDisplayX
+      setDisplayWorldX(nextDisplayX)
     }
 
     const moving = Math.abs(velocityRef.current) > 0.00008
@@ -333,7 +400,14 @@ export function GameWorld() {
 
   if (phase !== 'exploring' && phase !== 'photo-mode') return null
 
-  const scrollX = worldX * maxScroll
+  const scrollX = displayWorldX * maxScroll
+  const parallaxFactor = maxScroll / window.innerWidth * 100 + 100
+  const zoneTint = {
+    'neon-alley': 'rgba(90, 120, 255, 0.12)',
+    'open-plaza': 'rgba(255, 195, 120, 0.09)',
+    'rain-corridor': 'rgba(80, 150, 220, 0.14)',
+    'nature-finale': 'rgba(180, 220, 255, 0.17)',
+  } as const
 
   return (
     <div
@@ -391,11 +465,53 @@ export function GameWorld() {
         pointerEvents: 'none',
       }} />
 
+      {/* Zone color grade */}
+      <div style={{
+        position: 'absolute',
+        inset: 0,
+        background: zoneTint[currentZone],
+        mixBlendMode: 'screen',
+        transition: 'background 1s ease',
+        pointerEvents: 'none',
+        zIndex: 2,
+      }} />
+
+      {/* Photo spot markers */}
+      {PHOTO_SPOTS.map((spot, i) => {
+        const screenX = (spot.x - displayWorldX) * parallaxFactor
+        if (screenX < -10 || screenX > 110) return null
+        const nearby = Math.abs(worldX - spot.x) <= PHOTO_SPOT_THRESHOLD
+        return (
+          <div
+            key={`spot-${i}`}
+            style={{
+              position: 'absolute',
+              left: `${screenX}%`,
+              bottom: '10%',
+              transform: 'translateX(-50%)',
+              width: nearby ? '42px' : '30px',
+              height: nearby ? '42px' : '30px',
+              borderRadius: '50%',
+              border: nearby ? '2px solid rgba(255,255,255,0.95)' : '1px solid rgba(255,255,255,0.6)',
+              background: nearby
+                ? 'radial-gradient(circle, rgba(255,255,255,0.4), rgba(120,190,255,0.08))'
+                : 'radial-gradient(circle, rgba(255,255,255,0.2), rgba(120,190,255,0.03))',
+              boxShadow: nearby
+                ? '0 0 28px rgba(170, 210, 255, 0.9)'
+                : '0 0 16px rgba(120, 190, 255, 0.45)',
+              animation: nearby ? 'photoSpotPulse 1s ease-in-out infinite' : 'photoSpotPulse 2.2s ease-in-out infinite',
+              pointerEvents: 'none',
+              zIndex: 9,
+            }}
+          />
+        )
+      })}
+
       {/* Dollar bills to collect */}
       {BILL_POSITIONS.map((bill, i) => {
         if (collectedBills.has(i)) return null
         // Position relative to viewport based on worldX
-        const screenX = (bill.x - worldX) * (maxScroll / window.innerWidth * 100 + 100)
+        const screenX = (bill.x - displayWorldX) * parallaxFactor
         if (screenX < -10 || screenX > 110) return null
         return (
           <div
@@ -431,7 +547,7 @@ export function GameWorld() {
       {worldX >= 0.72 && FROZEN_BILLS.map((bill, i) => {
         if (collectedFrozenBills.has(i)) return null
         // Show bill from 0.04 before trigger to 0.06 after (wider window)
-        const dist = worldX - bill.trigger
+        const dist = displayWorldX - bill.trigger
         if (dist < -0.04 || dist > 0.06) return null
         // Bill appears ahead at 75% and moves left to 25% as player walks through
         const screenX = 75 - (dist + 0.04) * (50 / 0.10)
@@ -602,6 +718,59 @@ export function GameWorld() {
         </div>
       ))}
 
+      {/* Jump indicator */}
+      <div style={{
+        position: 'absolute',
+        top: '60px',
+        left: '12px',
+        zIndex: 24,
+        display: 'flex',
+        gap: '6px',
+        alignItems: 'center',
+        padding: '6px 10px',
+        borderRadius: '20px',
+        background: 'rgba(0,0,0,0.35)',
+        border: '1px solid rgba(255,255,255,0.22)',
+      }}>
+        {Array.from({ length: maxJumps }, (_, i) => {
+          const used = i < jumpCount
+          return (
+            <span
+              key={`jump-${i}`}
+              style={{
+                width: '9px',
+                height: '9px',
+                borderRadius: '50%',
+                background: used ? 'rgba(255,255,255,0.22)' : 'rgba(180,225,255,0.95)',
+                boxShadow: used ? 'none' : '0 0 8px rgba(170,220,255,0.75)',
+                transition: 'all 0.2s ease',
+                display: 'inline-block',
+              }}
+            />
+          )
+        })}
+      </div>
+
+      {/* Combo streak */}
+      {streak > 1 && (
+        <div style={{
+          position: 'absolute',
+          top: '11%',
+          left: '50%',
+          transform: 'translateX(-50%)',
+          zIndex: 24,
+          color: '#c7f0ff',
+          fontSize: '0.72rem',
+          letterSpacing: '0.16em',
+          textTransform: 'uppercase',
+          fontWeight: 700,
+          textShadow: '0 0 18px rgba(130,210,255,0.95)',
+          animation: 'pulse 1.2s ease-in-out infinite',
+        }}>
+          Flow x{streak}
+        </div>
+      )}
+
       {/* Bill counter */}
       <div style={{
         position: 'absolute',
@@ -650,7 +819,7 @@ export function GameWorld() {
       }} />
 
       {/* Particles overlay */}
-      <Particles progress={worldX} />
+      <Particles progress={displayWorldX} />
 
       {/* Controls instruction */}
       {worldX < 0.02 && (
@@ -671,6 +840,7 @@ export function GameWorld() {
         }}>
           <div>HOLD RIGHT TO WALK</div>
           <div style={{ opacity: 0.6 }}>SWIPE UP TWICE TO DOUBLE JUMP</div>
+          <div style={{ opacity: 0.5 }}>STEP INTO GLOWING RINGS FOR PHOTO MODE</div>
         </div>
       )}
 

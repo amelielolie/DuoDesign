@@ -1,4 +1,4 @@
-import { useCallback, useRef } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import { useGameStore } from '../store/gameStore'
 
 export function PhotoModeUI() {
@@ -8,6 +8,35 @@ export function PhotoModeUI() {
   const addCapturedPhoto = useGameStore((s) => s.addCapturedPhoto)
   const currentZone = useGameStore((s) => s.currentZone)
   const canvasRef = useRef<HTMLCanvasElement>(null)
+  const [capturing, setCapturing] = useState(false)
+
+  const downloadImage = useCallback((dataUrl: string) => {
+    const link = document.createElement('a')
+    link.href = dataUrl
+    link.download = 'duo-world-photo.png'
+    link.click()
+  }, [])
+
+  const shareOrSave = useCallback(async (dataUrl: string) => {
+    const blob = await (await fetch(dataUrl)).blob()
+    const file = new File([blob], 'duo-world-photo.png', { type: 'image/png' })
+    const canShareFiles = navigator.canShare ? navigator.canShare({ files: [file] }) : false
+
+    if (navigator.share && canShareFiles) {
+      try {
+        await navigator.share({
+          title: 'My Duo World Look',
+          text: 'Check out my look in Duo World!',
+          files: [file],
+        })
+      } catch {
+        downloadImage(dataUrl)
+      }
+      return
+    }
+
+    downloadImage(dataUrl)
+  }, [downloadImage])
 
   const generateShareCard = useCallback((): Promise<string> => {
     return new Promise((resolve) => {
@@ -25,7 +54,6 @@ export function PhotoModeUI() {
       canvas.width = 600
       canvas.height = 900
 
-      // Background gradient based on zone
       const gradients: Record<string, [string, string]> = {
         'neon-alley': ['#0a1520', '#2a3545'],
         'open-plaza': ['#0c1825', '#2a3a4a'],
@@ -39,7 +67,6 @@ export function PhotoModeUI() {
       ctx.fillStyle = grad
       ctx.fillRect(0, 0, 600, 900)
 
-      // Load and draw the avatar image
       const img = new Image()
       img.crossOrigin = 'anonymous'
       img.onload = () => {
@@ -48,21 +75,17 @@ export function PhotoModeUI() {
         const imgX = (600 - imgW) / 2
         ctx.drawImage(img, imgX, 150, imgW, imgH)
 
-        // Brand watermark
         ctx.fillStyle = 'rgba(255,255,255,0.5)'
         ctx.font = '600 14px system-ui'
-        ctx.letterSpacing = '3px'
         ctx.textAlign = 'right'
         ctx.fillText('DUO DESIGN', 570, 870)
 
-        // Zone label
         ctx.fillStyle = 'rgba(255,255,255,0.3)'
         ctx.font = '300 11px system-ui'
         ctx.textAlign = 'left'
         ctx.fillText(currentZone.replace('-', ' ').toUpperCase(), 30, 870)
 
-        const dataUrl = canvas.toDataURL('image/png')
-        resolve(dataUrl)
+        resolve(canvas.toDataURL('image/png'))
       }
       img.onerror = () => resolve('')
       img.src = '/avatars/character.png'
@@ -70,11 +93,17 @@ export function PhotoModeUI() {
   }, [currentZone])
 
   const capturePhoto = useCallback(async () => {
+    if (capturing) return
+    setCapturing(true)
     const dataUrl = await generateShareCard()
-    if (!dataUrl) return
+    if (!dataUrl) {
+      setCapturing(false)
+      return
+    }
     addCapturedPhoto(dataUrl)
-    shareOrSave(dataUrl)
-  }, [generateShareCard, addCapturedPhoto])
+    await shareOrSave(dataUrl)
+    setCapturing(false)
+  }, [capturing, generateShareCard, addCapturedPhoto, shareOrSave])
 
   const enterPhotoMode = useCallback(() => {
     setPhase('photo-mode')
@@ -84,33 +113,6 @@ export function PhotoModeUI() {
     setPhase('exploring')
   }, [setPhase])
 
-  const shareOrSave = async (dataUrl: string) => {
-    const blob = await (await fetch(dataUrl)).blob()
-    const file = new File([blob], 'duo-world-photo.png', { type: 'image/png' })
-
-    if (navigator.share) {
-      try {
-        await navigator.share({
-          title: 'My Duo World Look',
-          text: 'Check out my look in Duo World!',
-          files: [file],
-        })
-      } catch {
-        downloadImage(dataUrl)
-      }
-    } else {
-      downloadImage(dataUrl)
-    }
-  }
-
-  const downloadImage = (dataUrl: string) => {
-    const link = document.createElement('a')
-    link.href = dataUrl
-    link.download = 'duo-world-photo.png'
-    link.click()
-  }
-
-  // Photo spot button
   if (phase === 'exploring' && photoSpotNearby) {
     return (
       <>
@@ -123,26 +125,27 @@ export function PhotoModeUI() {
             left: '50%',
             transform: 'translateX(-50%)',
             zIndex: 30,
-            background: 'rgba(255,255,255,0.12)',
-            backdropFilter: 'blur(10px)',
-            border: '1px solid rgba(150, 200, 255, 0.3)',
+            background: 'rgba(255,255,255,0.14)',
+            backdropFilter: 'blur(12px)',
+            border: '1px solid rgba(180, 220, 255, 0.5)',
             borderRadius: '50px',
             padding: '12px 24px',
             color: '#fff',
-            fontSize: '0.8rem',
-            fontWeight: 400,
-            letterSpacing: '0.1em',
+            fontSize: '0.75rem',
+            fontWeight: 600,
+            letterSpacing: '0.14em',
             cursor: 'pointer',
-            animation: 'pulse 2s infinite',
+            textTransform: 'uppercase',
+            boxShadow: '0 0 20px rgba(160, 220, 255, 0.45)',
+            animation: 'pulse 1.6s infinite',
           }}
         >
-          PHOTO SPOT
+          Capture Duo Moment
         </button>
       </>
     )
   }
 
-  // Photo mode controls
   if (phase === 'photo-mode') {
     return (
       <>
@@ -153,38 +156,55 @@ export function PhotoModeUI() {
           left: 0,
           right: 0,
           display: 'flex',
-          justifyContent: 'center',
-          gap: '20px',
+          flexDirection: 'column',
+          alignItems: 'center',
+          gap: '12px',
+          color: 'rgba(255,255,255,0.75)',
+          fontSize: '0.65rem',
+          letterSpacing: '0.14em',
+          textTransform: 'uppercase',
+          textAlign: 'center',
           zIndex: 30,
         }}>
-          <button
-            onClick={exitPhotoMode}
-            style={{
-              background: 'rgba(255,255,255,0.1)',
-              border: '1px solid rgba(255,255,255,0.2)',
-              borderRadius: '50%',
-              width: '50px',
-              height: '50px',
-              color: '#fff',
-              fontSize: '1.2rem',
-              cursor: 'pointer',
-            }}
-          >
-            x
-          </button>
-          <button
-            onClick={capturePhoto}
-            style={{
-              background: '#fff',
-              border: 'none',
-              borderRadius: '50%',
-              width: '70px',
-              height: '70px',
-              cursor: 'pointer',
-              boxShadow: '0 0 20px rgba(255,255,255,0.3)',
-            }}
-          />
-          <div style={{ width: '50px' }} />
+          <div>Photo Mode Active</div>
+          <div style={{
+            display: 'flex',
+            justifyContent: 'center',
+            gap: '20px',
+          }}>
+            <button
+              onClick={exitPhotoMode}
+              style={{
+                background: 'rgba(255,255,255,0.1)',
+                border: '1px solid rgba(255,255,255,0.2)',
+                borderRadius: '50%',
+                width: '50px',
+                height: '50px',
+                color: '#fff',
+                fontSize: '0.62rem',
+                letterSpacing: '0.08em',
+                cursor: 'pointer',
+              }}
+            >
+              EXIT
+            </button>
+            <button
+              onClick={capturePhoto}
+              disabled={capturing}
+              style={{
+                background: '#fff',
+                border: 'none',
+                borderRadius: '50%',
+                width: '70px',
+                height: '70px',
+                cursor: 'pointer',
+                boxShadow: '0 0 20px rgba(255,255,255,0.3)',
+                opacity: capturing ? 0.6 : 1,
+                transition: 'opacity 0.2s ease',
+              }}
+            />
+            <div style={{ width: '50px' }} />
+          </div>
         </div>
       </>
     )

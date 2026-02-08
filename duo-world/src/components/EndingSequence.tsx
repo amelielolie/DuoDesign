@@ -1,8 +1,37 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useGameStore } from '../store/gameStore'
 
-const VIDEO_VERSION = '4'
-const createVideoUrl = () => `/DUO_VIDEO.mp4?v=${VIDEO_VERSION}&cb=${Date.now()}`
+const VIDEO_SOURCES = [
+  '/DUO_VIDEO.mp4?v=4',
+  '/DUO_VIDEO.mp4',
+]
+const MAX_AUTO_RETRIES = 3
+
+const createVideoUrl = (source: string) => {
+  const joiner = source.includes('?') ? '&' : '?'
+  return `${source}${joiner}cb=${Date.now()}`
+}
+
+function getMediaErrorLabel(code?: number): string {
+  switch (code) {
+    case 1:
+      return 'aborted'
+    case 2:
+      return 'network'
+    case 3:
+      return 'decode'
+    case 4:
+      return 'unsupported'
+    default:
+      return 'unknown'
+  }
+}
+
+function isIOSDevice(): boolean {
+  if (typeof navigator === 'undefined') return false
+  return /iPad|iPhone|iPod/.test(navigator.userAgent)
+    || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
+}
 
 export function EndingSequence() {
   const phase = useGameStore((s) => s.phase)
@@ -10,14 +39,47 @@ export function EndingSequence() {
   const reset = useGameStore((s) => s.reset)
   const [stage, setStage] = useState<'video' | 'reward'>('video')
   const [cardImage, setCardImage] = useState<string | null>(null)
+  const [videoSourceIndex, setVideoSourceIndex] = useState(0)
   // videoUrl is null until the ending phase — prevents premature requests
   const [videoUrl, setVideoUrl] = useState<string | null>(null)
   const [videoStarted, setVideoStarted] = useState(false)
   const [videoMuted, setVideoMuted] = useState(true)
   const [showPlayButton, setShowPlayButton] = useState(false)
   const [videoError, setVideoError] = useState(false)
+  const [videoErrorLabel, setVideoErrorLabel] = useState('unknown')
+  const [rangeProbeStatus, setRangeProbeStatus] = useState<'idle' | 'ok' | 'failed'>('idle')
+  const [autoRetryCount, setAutoRetryCount] = useState(0)
+  const [isPreparingFallback, setIsPreparingFallback] = useState(false)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const videoRef = useRef<HTMLVideoElement>(null)
+  const blobVideoUrlRef = useRef<string | null>(null)
+  const retryTimerRef = useRef<number | null>(null)
+  const isIOS = isIOSDevice()
+
+  const clearRetryTimer = useCallback(() => {
+    if (retryTimerRef.current !== null) {
+      window.clearTimeout(retryTimerRef.current)
+      retryTimerRef.current = null
+    }
+  }, [])
+
+  const resetVideoUiState = useCallback(() => {
+    setVideoStarted(false)
+    setVideoMuted(true)
+    setShowPlayButton(false)
+    setVideoError(false)
+    setVideoErrorLabel('unknown')
+  }, [])
+
+  useEffect(() => {
+    return () => {
+      clearRetryTimer()
+      if (blobVideoUrlRef.current) {
+        URL.revokeObjectURL(blobVideoUrlRef.current)
+        blobVideoUrlRef.current = null
+      }
+    }
+  }, [clearRetryTimer])
 
   // Create video URL and reset state when entering ending phase.
   // URL is created HERE only — not in useState — so the video element
@@ -25,33 +87,159 @@ export function EndingSequence() {
   useEffect(() => {
     if (phase !== 'ending') return
     setStage('video')
-    setVideoUrl(createVideoUrl())
-    setVideoStarted(false)
-    setVideoMuted(true)
-    setShowPlayButton(false)
-    setVideoError(false)
+    setVideoSourceIndex(0)
+    setVideoUrl(createVideoUrl(VIDEO_SOURCES[0]))
+    resetVideoUiState()
+    setRangeProbeStatus('idle')
+    setAutoRetryCount(0)
+    clearRetryTimer()
+    if (blobVideoUrlRef.current) {
+      URL.revokeObjectURL(blobVideoUrlRef.current)
+      blobVideoUrlRef.current = null
+    }
 
     const cardTimer = setTimeout(() => generateCard(), 1000)
     return () => clearTimeout(cardTimer)
-  }, [phase])
+  }, [phase, clearRetryTimer, resetVideoUiState])
 
   // If autoplay doesn't fire within 1.5s, show play button.
   // Short timeout so iPhone users aren't staring at a black screen.
   useEffect(() => {
-    if (!videoUrl || videoStarted) return
+    if (phase !== 'ending' || !videoUrl || videoStarted) return
     const timer = setTimeout(() => {
       if (!videoStarted) setShowPlayButton(true)
     }, 1500)
     return () => clearTimeout(timer)
-  }, [videoUrl, videoStarted])
+  }, [phase, videoUrl, videoStarted])
+
+  useEffect(() => {
+    if (phase !== 'ending' || !videoUrl) return
+    const video = videoRef.current
+    if (!video) return
+    video.setAttribute('playsinline', 'true')
+    video.setAttribute('webkit-playsinline', 'true')
+    video.setAttribute('x-webkit-airplay', 'allow')
+    video.playsInline = true
+    video.muted = true
+    video.load()
+
+    // On iPhone, muted autoplay is the safest automatic path. If it fails,
+    // the explicit play CTA remains available.
+    const timer = window.setTimeout(() => {
+      void video.play().catch(() => {
+        setShowPlayButton(true)
+      })
+    }, 60)
+
+    return () => window.clearTimeout(timer)
+  }, [phase, videoUrl])
+
+  useEffect(() => {
+    if (phase !== 'ending' || !videoUrl) return
+    if (videoUrl.startsWith('blob:')) {
+      setRangeProbeStatus('ok')
+      return
+    }
+    const controller = new AbortController()
+    fetch(videoUrl, {
+      method: 'GET',
+      headers: { Range: 'bytes=0-1023' },
+      cache: 'no-store',
+      signal: controller.signal,
+    })
+      .then((res) => {
+        if (res.status === 206 || res.status === 200) {
+          setRangeProbeStatus('ok')
+        } else {
+          setRangeProbeStatus('failed')
+        }
+      })
+      .catch(() => setRangeProbeStatus('failed'))
+    return () => controller.abort()
+  }, [phase, videoUrl])
+
+  const prepareBlobFallback = useCallback(async (): Promise<boolean> => {
+    if (isPreparingFallback) return false
+    setIsPreparingFallback(true)
+    try {
+      const response = await fetch('/DUO_VIDEO.mp4', { cache: 'no-store' })
+      if (!response.ok) return false
+      const fetchedBlob = await response.blob()
+      const videoBlob = fetchedBlob.type.startsWith('video/')
+        ? fetchedBlob
+        : new Blob([fetchedBlob], { type: 'video/mp4' })
+      if (blobVideoUrlRef.current) {
+        URL.revokeObjectURL(blobVideoUrlRef.current)
+      }
+      const objectUrl = URL.createObjectURL(videoBlob)
+      blobVideoUrlRef.current = objectUrl
+      setVideoSourceIndex(VIDEO_SOURCES.length)
+      setVideoUrl(objectUrl)
+      setRangeProbeStatus('ok')
+      return true
+    } catch {
+      return false
+    } finally {
+      setIsPreparingFallback(false)
+    }
+  }, [isPreparingFallback])
+
+  const retryVideo = useCallback(async () => {
+    resetVideoUiState()
+    setRangeProbeStatus('idle')
+    if (videoSourceIndex < VIDEO_SOURCES.length - 1) {
+      const next = videoSourceIndex + 1
+      setVideoSourceIndex(next)
+      setVideoUrl(createVideoUrl(VIDEO_SOURCES[next]))
+      return
+    }
+
+    if (blobVideoUrlRef.current) {
+      setVideoSourceIndex(VIDEO_SOURCES.length)
+      setVideoUrl(blobVideoUrlRef.current)
+      setRangeProbeStatus('ok')
+      setShowPlayButton(true)
+      return
+    }
+
+    const fallbackReady = await prepareBlobFallback()
+    if (!fallbackReady) {
+      setVideoError(true)
+      setVideoErrorLabel('network')
+      setShowPlayButton(true)
+    }
+  }, [prepareBlobFallback, resetVideoUiState, videoSourceIndex])
+
+  const markVideoFailure = useCallback((label: string) => {
+    setVideoError(true)
+    setVideoErrorLabel(label)
+    setShowPlayButton(true)
+    setAutoRetryCount((previous) => {
+      if (previous >= MAX_AUTO_RETRIES) return previous
+      clearRetryTimer()
+      retryTimerRef.current = window.setTimeout(() => {
+        retryTimerRef.current = null
+        void retryVideo()
+      }, 220)
+      return previous + 1
+    })
+  }, [clearRetryTimer, retryVideo])
 
   const handlePlay = useCallback(() => {
-    setVideoStarted(true)
-    setShowPlayButton(false)
-    setVideoError(false)
     const video = videoRef.current
     setVideoMuted(video?.muted ?? true)
   }, [])
+
+  const handlePlaying = useCallback(() => {
+    clearRetryTimer()
+    setAutoRetryCount(0)
+    setVideoStarted(true)
+    setShowPlayButton(false)
+    setVideoError(false)
+    setVideoErrorLabel('unknown')
+    const video = videoRef.current
+    setVideoMuted(video?.muted ?? true)
+  }, [clearRetryTimer])
 
   const handleUnmute = useCallback(() => {
     const video = videoRef.current
@@ -64,6 +252,7 @@ export function EndingSequence() {
   const handlePlayVideo = useCallback(async () => {
     const video = videoRef.current
     if (!video) return
+    clearRetryTimer()
 
     try {
       video.muted = false
@@ -71,6 +260,9 @@ export function EndingSequence() {
       setVideoStarted(true)
       setVideoMuted(false)
       setShowPlayButton(false)
+      setVideoError(false)
+      setVideoErrorLabel('unknown')
+      setAutoRetryCount(0)
       return
     } catch { /* fall back to muted */ }
 
@@ -80,18 +272,18 @@ export function EndingSequence() {
       setVideoStarted(true)
       setVideoMuted(true)
       setShowPlayButton(false)
+      setVideoError(false)
+      setVideoErrorLabel('unknown')
+      setAutoRetryCount(0)
     } catch {
-      setVideoError(true)
+      markVideoFailure(getMediaErrorLabel(video.error?.code))
     }
-  }, [])
+  }, [clearRetryTimer, markVideoFailure])
 
-  const retryVideo = useCallback(() => {
-    setVideoUrl(createVideoUrl())
-    setVideoStarted(false)
-    setVideoMuted(true)
-    setShowPlayButton(false)
-    setVideoError(false)
-  }, [])
+  const openNativePlayer = useCallback(() => {
+    const sourceIndex = Math.min(videoSourceIndex, VIDEO_SOURCES.length - 1)
+    window.location.href = VIDEO_SOURCES[sourceIndex]
+  }, [videoSourceIndex])
 
   const generateCard = useCallback(() => {
     const canvas = canvasRef.current
@@ -156,11 +348,21 @@ export function EndingSequence() {
   }, [cardImage])
 
   const handleReplay = useCallback(() => {
+    clearRetryTimer()
+    if (blobVideoUrlRef.current) {
+      URL.revokeObjectURL(blobVideoUrlRef.current)
+      blobVideoUrlRef.current = null
+    }
     setStage('video')
     setCardImage(null)
+    setVideoSourceIndex(0)
     setVideoUrl(null)
+    setAutoRetryCount(0)
+    setVideoErrorLabel('unknown')
+    setRangeProbeStatus('idle')
+    setIsPreparingFallback(false)
     reset()
-  }, [reset])
+  }, [clearRetryTimer, reset])
 
   if (phase !== 'ending' && phase !== 'reward') return null
 
@@ -193,11 +395,40 @@ export function EndingSequence() {
                 <video
                   key={videoUrl}
                   ref={videoRef}
+                  src={videoUrl}
                   autoPlay
                   muted
                   playsInline
                   preload="auto"
+                  controls={isIOS || videoError}
+                  controlsList="nodownload noplaybackrate"
+                  disablePictureInPicture
+                  poster="/avatars/look1.png"
                   onPlay={handlePlay}
+                  onPlaying={handlePlaying}
+                  onCanPlay={() => {
+                    setVideoError(false)
+                    setVideoErrorLabel('unknown')
+                  }}
+                  onError={() => {
+                    const code = videoRef.current?.error?.code
+                    markVideoFailure(getMediaErrorLabel(code))
+                  }}
+                  onStalled={() => {
+                    markVideoFailure('network')
+                  }}
+                  onWaiting={() => {
+                    const video = videoRef.current
+                    if (!video || video.currentTime < 0.25) {
+                      setShowPlayButton(true)
+                    }
+                  }}
+                  onPause={() => {
+                    const video = videoRef.current
+                    if (video && !video.ended && video.currentTime < 0.25) {
+                      setShowPlayButton(true)
+                    }
+                  }}
                   onEnded={() => {
                     setStage('reward')
                     setPhase('reward')
@@ -208,9 +439,7 @@ export function EndingSequence() {
                     aspectRatio: '3 / 4',
                     objectFit: 'contain',
                   }}
-                >
-                  <source src={videoUrl} type="video/mp4" />
-                </video>
+                />
               )}
 
               {/* Tap to unmute — shows when playing muted (iPhone) */}
@@ -278,6 +507,18 @@ export function EndingSequence() {
               </button>
             )}
 
+            {rangeProbeStatus === 'failed' && !videoStarted && (
+              <div style={{
+                marginTop: '0.55rem',
+                color: 'rgba(255,255,255,0.5)',
+                fontSize: '0.58rem',
+                letterSpacing: '0.07em',
+                textTransform: 'uppercase',
+              }}>
+                weak network/media response detected
+              </div>
+            )}
+
             {videoError && (
               <>
                 <div style={{
@@ -287,16 +528,28 @@ export function EndingSequence() {
                   letterSpacing: '0.05em',
                   textAlign: 'center',
                 }}>
-                  Video failed to load.
+                  Video failed ({videoErrorLabel}).
+                </div>
+                <div style={{
+                  marginTop: '0.35rem',
+                  color: 'rgba(255,255,255,0.45)',
+                  fontSize: '0.58rem',
+                  letterSpacing: '0.06em',
+                  textTransform: 'uppercase',
+                }}>
+                  source {videoSourceIndex >= VIDEO_SOURCES.length ? 'blob fallback' : `${videoSourceIndex + 1}/${VIDEO_SOURCES.length}`} · range {rangeProbeStatus} · auto-retry {autoRetryCount}/{MAX_AUTO_RETRIES}
                 </div>
                 <div style={{
                   marginTop: '0.55rem',
                   display: 'flex',
-                  gap: '0.6rem',
+                  gap: '0.8rem',
                   alignItems: 'center',
                 }}>
                   <button
-                    onClick={retryVideo}
+                    onClick={() => {
+                      void retryVideo()
+                    }}
+                    disabled={isPreparingFallback}
                     style={{
                       background: 'rgba(255,255,255,0.16)',
                       color: '#fff',
@@ -306,25 +559,25 @@ export function EndingSequence() {
                       fontSize: '0.62rem',
                       letterSpacing: '0.08em',
                       cursor: 'pointer',
+                      opacity: isPreparingFallback ? 0.55 : 1,
                     }}
                   >
-                    RETRY
+                    {isPreparingFallback ? 'PREPARING…' : 'RETRY'}
                   </button>
-                  {videoUrl && (
-                    <a
-                      href={videoUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      style={{
-                        color: 'rgba(255,255,255,0.85)',
-                        fontSize: '0.62rem',
-                        letterSpacing: '0.08em',
-                        textDecoration: 'underline',
-                      }}
-                    >
-                      OPEN IN NATIVE PLAYER
-                    </a>
-                  )}
+                  <button
+                    onClick={openNativePlayer}
+                    style={{
+                      background: 'transparent',
+                      border: 'none',
+                      color: 'rgba(255,255,255,0.85)',
+                      fontSize: '0.62rem',
+                      letterSpacing: '0.08em',
+                      textDecoration: 'underline',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    OPEN IN NATIVE PLAYER
+                  </button>
                 </div>
               </>
             )}

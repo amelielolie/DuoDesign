@@ -3,6 +3,7 @@ import { SplashScreen } from './components/SplashScreen'
 import { GameWorld } from './components/GameWorld'
 import { EndingSequence } from './components/EndingSequence'
 import { AmbientMusic } from './components/AmbientMusic'
+import { PhotoModeUI } from './components/PhotoModeUI'
 
 function SoundButton() {
   const soundMuted = useGameStore((s) => s.soundMuted)
@@ -71,6 +72,7 @@ function App() {
       {phase === 'splash' && <SplashScreen />}
 
       <GameWorld />
+      <PhotoModeUI />
       <EndingSequence />
       <AmbientMusic />
       <SoundButton />

@@ -5,6 +5,7 @@ import { unlockAudioContext } from './AmbientMusic'
 export function SplashScreen() {
   const setPhase = useGameStore((s) => s.setPhase)
   const [ready, setReady] = useState(false)
+  const [starting, setStarting] = useState(false)
 
   useEffect(() => {
     const timer = setTimeout(() => setReady(true), 1200)
@@ -12,6 +13,8 @@ export function SplashScreen() {
   }, [])
 
   const handleStart = () => {
+    if (starting) return
+    setStarting(true)
     // Unlock audio context during this user gesture (critical for iOS)
     unlockAudioContext()
     setPhase('exploring')
@@ -20,10 +23,7 @@ export function SplashScreen() {
   return (
     <div
       onClick={handleStart}
-      onTouchEnd={(e) => {
-        e.preventDefault()
-        handleStart()
-      }}
+      onPointerUp={handleStart}
       style={{
         position: 'fixed',
         inset: 0,

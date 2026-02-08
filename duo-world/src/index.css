@@ -116,6 +116,19 @@ html, body, #root {
   100% { transform: translate(-5px, 5px); opacity: 0.1; }
 }
 
+@keyframes sparkDrift {
+  0% { transform: translate(0, 0) scale(0.7); opacity: 0.25; }
+  50% { transform: translate(8px, -10px) scale(1); opacity: 0.9; }
+  100% { transform: translate(-6px, 8px) scale(0.75); opacity: 0.2; }
+}
+
+@keyframes emberRise {
+  0% { transform: translateY(0) translateX(0) scale(0.9); opacity: 0; }
+  10% { opacity: 0.75; }
+  60% { transform: translateY(-45vh) translateX(8px) scale(1.1); opacity: 0.6; }
+  100% { transform: translateY(-80vh) translateX(-6px) scale(0.7); opacity: 0; }
+}
+
 @keyframes billFloat {
   0%, 100% { transform: translateY(0) rotate(-2deg); }
   50% { transform: translateY(-8px) rotate(2deg); }
@@ -129,6 +142,11 @@ html, body, #root {
 @keyframes collectText {
   0% { transform: translateX(-50%) translateY(0); opacity: 1; }
   100% { transform: translateX(-50%) translateY(-40px); opacity: 0; }
+}
+
+@keyframes photoSpotPulse {
+  0%, 100% { transform: translateX(-50%) scale(1); opacity: 0.8; }
+  50% { transform: translateX(-50%) scale(1.16); opacity: 1; }
 }
 
 @keyframes frozenFloat {
