@@ -1,13 +1,17 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useGameStore } from '../store/gameStore'
 
-const VIDEO_SOURCES = [
+const DEFAULT_VIDEO_SOURCES = [
   '/DUO_VIDEO.mp4?v=4',
+  '/DUO_VIDEO.mp4',
+]
+const IOS_VIDEO_SOURCES = [
   '/DUO_VIDEO.mp4',
 ]
 const MAX_AUTO_RETRIES = 3
 
-const createVideoUrl = (source: string) => {
+const createVideoUrl = (source: string, cacheBust = true) => {
+  if (!cacheBust) return source
   const joiner = source.includes('?') ? '&' : '?'
   return `${source}${joiner}cb=${Date.now()}`
 }
@@ -55,6 +59,8 @@ export function EndingSequence() {
   const blobVideoUrlRef = useRef<string | null>(null)
   const retryTimerRef = useRef<number | null>(null)
   const isIOS = isIOSDevice()
+  const activeVideoSources = isIOS ? IOS_VIDEO_SOURCES : DEFAULT_VIDEO_SOURCES
+  const shouldCacheBust = !isIOS
 
   const clearRetryTimer = useCallback(() => {
     if (retryTimerRef.current !== null) {
@@ -88,7 +94,7 @@ export function EndingSequence() {
     if (phase !== 'ending') return
     setStage('video')
     setVideoSourceIndex(0)
-    setVideoUrl(createVideoUrl(VIDEO_SOURCES[0]))
+    setVideoUrl(createVideoUrl(activeVideoSources[0], shouldCacheBust))
     resetVideoUiState()
     setRangeProbeStatus('idle')
     setAutoRetryCount(0)
@@ -100,7 +106,7 @@ export function EndingSequence() {
 
     const cardTimer = setTimeout(() => generateCard(), 1000)
     return () => clearTimeout(cardTimer)
-  }, [phase, clearRetryTimer, resetVideoUiState])
+  }, [phase, clearRetryTimer, resetVideoUiState, activeVideoSources, shouldCacheBust])
 
   // If autoplay doesn't fire within 1.5s, show play button.
   // Short timeout so iPhone users aren't staring at a black screen.
@@ -173,7 +179,7 @@ export function EndingSequence() {
       }
       const objectUrl = URL.createObjectURL(videoBlob)
       blobVideoUrlRef.current = objectUrl
-      setVideoSourceIndex(VIDEO_SOURCES.length)
+      setVideoSourceIndex(activeVideoSources.length)
       setVideoUrl(objectUrl)
       setRangeProbeStatus('ok')
       return true
@@ -182,20 +188,20 @@ export function EndingSequence() {
     } finally {
       setIsPreparingFallback(false)
     }
-  }, [isPreparingFallback])
+  }, [isPreparingFallback, activeVideoSources.length])
 
   const retryVideo = useCallback(async () => {
     resetVideoUiState()
     setRangeProbeStatus('idle')
-    if (videoSourceIndex < VIDEO_SOURCES.length - 1) {
+    if (videoSourceIndex < activeVideoSources.length - 1) {
       const next = videoSourceIndex + 1
       setVideoSourceIndex(next)
-      setVideoUrl(createVideoUrl(VIDEO_SOURCES[next]))
+      setVideoUrl(createVideoUrl(activeVideoSources[next], shouldCacheBust))
       return
     }
 
     if (blobVideoUrlRef.current) {
-      setVideoSourceIndex(VIDEO_SOURCES.length)
+      setVideoSourceIndex(activeVideoSources.length)
       setVideoUrl(blobVideoUrlRef.current)
       setRangeProbeStatus('ok')
       setShowPlayButton(true)
@@ -208,7 +214,7 @@ export function EndingSequence() {
       setVideoErrorLabel('network')
       setShowPlayButton(true)
     }
-  }, [prepareBlobFallback, resetVideoUiState, videoSourceIndex])
+  }, [prepareBlobFallback, resetVideoUiState, videoSourceIndex, activeVideoSources, shouldCacheBust])
 
   const markVideoFailure = useCallback((label: string) => {
     setVideoError(true)
@@ -281,9 +287,9 @@ export function EndingSequence() {
   }, [clearRetryTimer, markVideoFailure])
 
   const openNativePlayer = useCallback(() => {
-    const sourceIndex = Math.min(videoSourceIndex, VIDEO_SOURCES.length - 1)
-    window.location.href = VIDEO_SOURCES[sourceIndex]
-  }, [videoSourceIndex])
+    const sourceIndex = Math.min(videoSourceIndex, activeVideoSources.length - 1)
+    window.location.href = activeVideoSources[sourceIndex]
+  }, [videoSourceIndex, activeVideoSources])
 
   const generateCard = useCallback(() => {
     const canvas = canvasRef.current
@@ -382,115 +388,113 @@ export function EndingSequence() {
       }}>
         {stage === 'video' && (
           <div style={{
+            position: 'relative',
             width: '100%',
             height: '100%',
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'center',
             background: '#000',
+            overflow: 'hidden',
           }}>
-            <div style={{ position: 'relative', width: '100%', maxHeight: '85%', display: 'flex', justifyContent: 'center' }}>
-              {videoUrl && (
-                <video
-                  key={videoUrl}
-                  ref={videoRef}
-                  src={videoUrl}
-                  autoPlay
-                  muted
-                  playsInline
-                  preload="auto"
-                  controls={isIOS || videoError}
-                  controlsList="nodownload noplaybackrate"
-                  disablePictureInPicture
-                  poster="/avatars/look1.png"
-                  onPlay={handlePlay}
-                  onPlaying={handlePlaying}
-                  onCanPlay={() => {
-                    setVideoError(false)
-                    setVideoErrorLabel('unknown')
-                  }}
-                  onError={() => {
-                    const code = videoRef.current?.error?.code
-                    markVideoFailure(getMediaErrorLabel(code))
-                  }}
-                  onStalled={() => {
-                    markVideoFailure('network')
-                  }}
-                  onWaiting={() => {
-                    const video = videoRef.current
-                    if (!video || video.currentTime < 0.25) {
-                      setShowPlayButton(true)
-                    }
-                  }}
-                  onPause={() => {
-                    const video = videoRef.current
-                    if (video && !video.ended && video.currentTime < 0.25) {
-                      setShowPlayButton(true)
-                    }
-                  }}
-                  onEnded={() => {
-                    setStage('reward')
-                    setPhase('reward')
-                  }}
-                  style={{
-                    width: '100%',
-                    maxHeight: '85vh',
-                    aspectRatio: '3 / 4',
-                    objectFit: 'contain',
-                  }}
-                />
-              )}
+            {videoUrl && (
+              <video
+                key={videoUrl}
+                ref={videoRef}
+                src={videoUrl}
+                autoPlay
+                muted
+                playsInline
+                preload="auto"
+                controls={isIOS || videoError}
+                controlsList="nodownload noplaybackrate"
+                disablePictureInPicture
+                poster="/avatars/look1.png"
+                onPlay={handlePlay}
+                onPlaying={handlePlaying}
+                onCanPlay={() => {
+                  setVideoError(false)
+                  setVideoErrorLabel('unknown')
+                }}
+                onError={() => {
+                  const code = videoRef.current?.error?.code
+                  markVideoFailure(getMediaErrorLabel(code))
+                }}
+                onStalled={() => {
+                  markVideoFailure('network')
+                }}
+                onWaiting={() => {
+                  const video = videoRef.current
+                  if (!video || video.currentTime < 0.25) {
+                    setShowPlayButton(true)
+                  }
+                }}
+                onPause={() => {
+                  const video = videoRef.current
+                  if (video && !video.ended && video.currentTime < 0.25) {
+                    setShowPlayButton(true)
+                  }
+                }}
+                onEnded={() => {
+                  setStage('reward')
+                  setPhase('reward')
+                }}
+                style={{
+                  width: '100%',
+                  height: '100%',
+                  objectFit: 'cover',
+                }}
+              />
+            )}
 
-              {/* Tap to unmute — shows when playing muted (iPhone) */}
-              {videoStarted && videoMuted && (
-                <div
-                  onClick={handleUnmute}
-                  style={{
-                    position: 'absolute',
-                    inset: 0,
-                    display: 'flex',
-                    alignItems: 'flex-end',
-                    justifyContent: 'center',
-                    paddingBottom: '12%',
-                    cursor: 'pointer',
-                  }}
-                >
-                  <div style={{
-                    background: 'rgba(0,0,0,0.55)',
-                    backdropFilter: 'blur(6px)',
-                    WebkitBackdropFilter: 'blur(6px)',
-                    borderRadius: '999px',
-                    padding: '0.5rem 1.1rem',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '0.4rem',
-                    animation: 'fadeIn 0.5s ease',
+            {/* Tap to unmute — shows when playing muted (iPhone) */}
+            {videoStarted && videoMuted && (
+              <div
+                onClick={handleUnmute}
+                style={{
+                  position: 'absolute',
+                  inset: 0,
+                  display: 'flex',
+                  alignItems: 'flex-end',
+                  justifyContent: 'center',
+                  paddingBottom: '12%',
+                  cursor: 'pointer',
+                }}
+              >
+                <div style={{
+                  background: 'rgba(0,0,0,0.55)',
+                  backdropFilter: 'blur(6px)',
+                  WebkitBackdropFilter: 'blur(6px)',
+                  borderRadius: '999px',
+                  padding: '0.5rem 1.1rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.4rem',
+                  animation: 'fadeIn 0.5s ease',
+                }}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.9)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+                    <line x1="23" y1="9" x2="17" y2="15" />
+                    <line x1="17" y1="9" x2="23" y2="15" />
+                  </svg>
+                  <span style={{
+                    color: 'rgba(255,255,255,0.9)',
+                    fontSize: '0.65rem',
+                    fontWeight: 600,
+                    letterSpacing: '0.1em',
                   }}>
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.9)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
-                      <line x1="23" y1="9" x2="17" y2="15" />
-                      <line x1="17" y1="9" x2="23" y2="15" />
-                    </svg>
-                    <span style={{
-                      color: 'rgba(255,255,255,0.9)',
-                      fontSize: '0.65rem',
-                      fontWeight: 600,
-                      letterSpacing: '0.1em',
-                    }}>
-                      TAP TO UNMUTE
-                    </span>
-                  </div>
+                    TAP TO UNMUTE
+                  </span>
                 </div>
-              )}
-            </div>
+              </div>
+            )}
 
             {/* Play button — shows if autoplay didn't fire in 1.5s (iPhone) */}
             {showPlayButton && !videoStarted && !videoError && (
               <button
                 onClick={handlePlayVideo}
                 style={{
-                  marginTop: '1rem',
+                  position: 'absolute',
+                  left: '50%',
+                  top: '50%',
+                  transform: 'translate(-50%, -50%)',
                   background: '#fff',
                   color: '#0a0a0a',
                   border: 'none',
@@ -509,7 +513,10 @@ export function EndingSequence() {
 
             {rangeProbeStatus === 'failed' && !videoStarted && (
               <div style={{
-                marginTop: '0.55rem',
+                position: 'absolute',
+                left: '50%',
+                top: '16px',
+                transform: 'translateX(-50%)',
                 color: 'rgba(255,255,255,0.5)',
                 fontSize: '0.58rem',
                 letterSpacing: '0.07em',
@@ -520,13 +527,17 @@ export function EndingSequence() {
             )}
 
             {videoError && (
-              <>
+              <div style={{
+                position: 'absolute',
+                left: '50%',
+                bottom: '12%',
+                transform: 'translateX(-50%)',
+                textAlign: 'center',
+              }}>
                 <div style={{
-                  marginTop: '0.8rem',
                   color: 'rgba(255,255,255,0.72)',
                   fontSize: '0.68rem',
                   letterSpacing: '0.05em',
-                  textAlign: 'center',
                 }}>
                   Video failed ({videoErrorLabel}).
                 </div>
@@ -537,7 +548,7 @@ export function EndingSequence() {
                   letterSpacing: '0.06em',
                   textTransform: 'uppercase',
                 }}>
-                  source {videoSourceIndex >= VIDEO_SOURCES.length ? 'blob fallback' : `${videoSourceIndex + 1}/${VIDEO_SOURCES.length}`} · range {rangeProbeStatus} · auto-retry {autoRetryCount}/{MAX_AUTO_RETRIES}
+                  source {videoSourceIndex >= activeVideoSources.length ? 'blob fallback' : `${videoSourceIndex + 1}/${activeVideoSources.length}`} · range {rangeProbeStatus} · auto-retry {autoRetryCount}/{MAX_AUTO_RETRIES}
                 </div>
                 <div style={{
                   marginTop: '0.55rem',
@@ -562,7 +573,7 @@ export function EndingSequence() {
                       opacity: isPreparingFallback ? 0.55 : 1,
                     }}
                   >
-                    {isPreparingFallback ? 'PREPARING…' : 'RETRY'}
+                    {isPreparingFallback ? 'PREPARING...' : 'RETRY'}
                   </button>
                   <button
                     onClick={openNativePlayer}
@@ -579,7 +590,7 @@ export function EndingSequence() {
                     OPEN IN NATIVE PLAYER
                   </button>
                 </div>
-              </>
+              </div>
             )}
 
             <button
@@ -588,10 +599,12 @@ export function EndingSequence() {
                 setPhase('reward')
               }}
               style={{
-                marginTop: '1rem',
+                position: 'absolute',
+                top: '18px',
+                right: '18px',
                 background: 'none',
                 border: 'none',
-                color: 'rgba(255,255,255,0.4)',
+                color: 'rgba(255,255,255,0.6)',
                 fontSize: '0.7rem',
                 letterSpacing: '0.1em',
                 cursor: 'pointer',
