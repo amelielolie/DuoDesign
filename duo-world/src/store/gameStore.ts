@@ -15,6 +15,7 @@ interface GameState {
   jumpY: number
   jumpCount: number
   maxJumps: number
+  kicking: boolean
   photoSpotNearby: boolean
   endingTriggered: boolean
   collectedBills: Set<number>
@@ -33,6 +34,7 @@ interface GameState {
   setJumpY: (y: number) => void
   setJumpCount: (count: number) => void
   setPhotoSpotNearby: (nearby: boolean) => void
+  setKicking: (kicking: boolean) => void
   triggerEnding: () => void
   collectBill: (index: number) => void
   toggleSound: () => void
@@ -56,6 +58,7 @@ export const useGameStore = create<GameState>((set) => ({
   jumpCount: 0,
   maxJumps: 2,
   photoSpotNearby: false,
+  kicking: false,
   endingTriggered: false,
   collectedBills: new Set<number>(),
   soundMuted: false,
@@ -78,6 +81,7 @@ export const useGameStore = create<GameState>((set) => ({
   setJumpY: (y) => set({ jumpY: y }),
   setJumpCount: (count) => set({ jumpCount: count }),
   setPhotoSpotNearby: (nearby) => set({ photoSpotNearby: nearby }),
+  setKicking: (kicking) => set({ kicking }),
   triggerEnding: () => set({ endingTriggered: true, phase: 'ending' }),
   collectBill: (index) =>
     set((state) => {
@@ -103,6 +107,7 @@ export const useGameStore = create<GameState>((set) => ({
       jumpY: 0,
       jumpCount: 0,
       photoSpotNearby: false,
+      kicking: false,
       endingTriggered: false,
       collectedBills: new Set<number>(),
       cameraShake: 0,

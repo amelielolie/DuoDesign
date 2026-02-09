@@ -90,6 +90,8 @@ export function GameWorld() {
   const currentZone = useGameStore((s) => s.currentZone)
   const collectedBills = useGameStore((s) => s.collectedBills)
   const collectBill = useGameStore((s) => s.collectBill)
+  const kicking = useGameStore((s) => s.kicking)
+  const setKicking = useGameStore((s) => s.setKicking)
   const cameraShake = useGameStore((s) => s.cameraShake)
   const triggerCameraShake = useGameStore((s) => s.triggerCameraShake)
   const zoneAnnouncement = useGameStore((s) => s.zoneAnnouncement)
@@ -110,6 +112,7 @@ export function GameWorld() {
   const streakRef = useRef(0)
   const lastCollectAtRef = useRef(0)
   const touchStartY = useRef(0)
+  const kickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const lastFrameTimeRef = useRef(0)
   const lastZoneRef = useRef<ZoneId>('neon-alley')
   const windowSizeRef = useRef({ w: window.innerWidth, h: window.innerHeight })
@@ -283,6 +286,18 @@ export function GameWorld() {
     triggerHaptic(isDoubleJump ? [10, 18, 12] : 10)
   }, [maxJumps, setJumping, setJumpCount, triggerHaptic])
 
+  const triggerKick = useCallback(() => {
+    if (kicking || jumping) return
+    setKicking(true)
+    triggerHaptic([8, 20, 12])
+    triggerCameraShake(1)
+    if (kickTimerRef.current) clearTimeout(kickTimerRef.current)
+    kickTimerRef.current = setTimeout(() => {
+      setKicking(false)
+      kickTimerRef.current = null
+    }, 700)
+  }, [kicking, jumping, setKicking, triggerHaptic, triggerCameraShake])
+
   // Landing dust effect
   const spawnLandingDust = useCallback(() => {
     const particles = Array.from({ length: 5 }, (_, i) => ({
@@ -389,10 +404,11 @@ export function GameWorld() {
     if (touchStartY.current > 0 && 'clientY' in e) {
       const deltaY = touchStartY.current - e.clientY
       if (deltaY > 50) triggerJump()
+      else if (deltaY < -50) triggerKick()
     }
     directionRef.current = 0
     touchStartY.current = 0
-  }, [triggerJump])
+  }, [triggerJump, triggerKick])
 
   useEffect(() => {
     const handler = (e: PointerEvent) => handlePointerUp(e)
@@ -420,6 +436,8 @@ export function GameWorld() {
         setWalking(true)
       } else if (e.key === ' ' || e.key === 'ArrowUp') {
         triggerJump()
+      } else if (e.key === 'ArrowDown' || e.key === 's') {
+        triggerKick()
       }
     }
     const handleKeyUp = (e: KeyboardEvent) => {
@@ -433,7 +451,7 @@ export function GameWorld() {
       window.removeEventListener('keydown', handleKeyDown)
       window.removeEventListener('keyup', handleKeyUp)
     }
-  }, [phase, setWalking, setDirection, triggerJump])
+  }, [phase, setWalking, setDirection, triggerJump, triggerKick])
 
   // Measure background strip width
   useEffect(() => {
@@ -963,16 +981,20 @@ export function GameWorld() {
         width: '45vw',
         maxWidth: '280px',
         aspectRatio: '1 / 1.3',
-        backgroundImage: jumping
-          ? 'url(/avatars/sprite-jump-clean.png)'
-          : walking
-            ? 'url(/avatars/sprite-walk-clean.png)'
-            : 'url(/avatars/sprite-idle-clean.png)',
+        backgroundImage: kicking
+          ? 'url(/avatars/sprite-kick-clean.png)'
+          : jumping
+            ? 'url(/avatars/sprite-jump-clean.png)'
+            : walking
+              ? 'url(/avatars/sprite-walk-clean.png)'
+              : 'url(/avatars/sprite-idle-clean.png)',
         backgroundSize: '300% 300%',
-        backgroundPosition: (!walking && !jumping) ? '0% 0%' : undefined,
+        backgroundPosition: (!walking && !jumping && !kicking) ? '0% 0%' : undefined,
         animation: !entered
           ? 'characterEnter 0.9s cubic-bezier(0.22, 1, 0.36, 1) forwards'
-          : (walking || jumping) ? 'spriteWalk 0.8s steps(1) infinite' : undefined,
+          : kicking
+            ? 'spriteKick 0.7s steps(1) forwards'
+            : (walking || jumping) ? 'spriteWalk 0.8s steps(1) infinite' : undefined,
         transform: entered ? (direction === -1 ? 'scaleX(-1)' : undefined) : undefined,
         ...(!entered ? { '--char-dir': direction === -1 ? -1 : 1 } as React.CSSProperties : {}),
         filter: 'drop-shadow(0 2px 12px rgba(0,0,0,0.7))',
@@ -1021,6 +1043,7 @@ export function GameWorld() {
         }}>
           <div>TAP RIGHT TO WALK</div>
           <div style={{ opacity: 0.6 }}>SWIPE UP TO JUMP</div>
+          <div style={{ opacity: 0.4 }}>SWIPE DOWN TO KICK</div>
         </div>
       )}
     </div>

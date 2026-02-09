@@ -41,7 +41,6 @@ export function EndingSequence() {
   const phase = useGameStore((s) => s.phase)
   const setPhase = useGameStore((s) => s.setPhase)
   const reset = useGameStore((s) => s.reset)
-  const collectedBillCount = useGameStore((s) => s.collectedBills.size)
   const [stage, setStage] = useState<'video' | 'reward'>('video')
   const [cardImage, setCardImage] = useState<string | null>(null)
   const [videoSourceIndex, setVideoSourceIndex] = useState(0)
@@ -55,7 +54,7 @@ export function EndingSequence() {
   const [rangeProbeStatus, setRangeProbeStatus] = useState<'idle' | 'ok' | 'failed'>('idle')
   const [autoRetryCount, setAutoRetryCount] = useState(0)
   const [isPreparingFallback, setIsPreparingFallback] = useState(false)
-  const canvasRef = useRef<HTMLCanvasElement>(null)
+  const canvasRef = useRef<HTMLCanvasElement>(null) // kept for share card generation
   const videoRef = useRef<HTMLVideoElement>(null)
   const blobVideoUrlRef = useRef<string | null>(null)
   const retryTimerRef = useRef<number | null>(null)
@@ -619,60 +618,88 @@ export function EndingSequence() {
 
         {stage === 'reward' && (
           <div style={{
+            position: 'relative',
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'center',
-            padding: '2rem 2rem calc(2rem + env(safe-area-inset-bottom, 0px))',
-            animation: 'fadeIn 1.2s ease',
+            justifyContent: 'center',
             width: '100%',
-            maxHeight: '100%',
-            overflowY: 'auto',
+            height: '100%',
+            overflow: 'hidden',
           }}>
-            {/* Journey Stats */}
+            {/* Atmospheric background — splash hero with blur */}
+            <img
+              src="/branding/splash-hero.png"
+              alt=""
+              draggable={false}
+              style={{
+                position: 'absolute',
+                inset: 0,
+                width: '100%',
+                height: '100%',
+                objectFit: 'cover',
+                filter: 'blur(8px) brightness(0.35) saturate(0.6)',
+                transform: 'scale(1.05)',
+                pointerEvents: 'none',
+                opacity: 0,
+                animation: 'fadeIn 2s ease 0.2s forwards',
+              }}
+            />
+            {/* Dark vignette overlay */}
             <div style={{
-              display: 'flex',
-              gap: '24px',
-              marginBottom: '1.5rem',
-              animation: 'fadeIn 1.5s ease',
-            }}>
-              <div style={{ textAlign: 'center' }}>
-                <div style={{
-                  color: '#2ecc40',
-                  fontSize: '1.8rem',
-                  fontWeight: 800,
-                  fontVariantNumeric: 'tabular-nums',
-                }}>
-                  ${collectedBillCount}
-                </div>
-                <div style={{
-                  color: 'rgba(255,255,255,0.4)',
-                  fontSize: '0.55rem',
-                  letterSpacing: '0.15em',
-                  textTransform: 'uppercase',
-                  marginTop: '2px',
-                }}>
-                  COLLECTED
-                </div>
-              </div>
-            </div>
+              position: 'absolute',
+              inset: 0,
+              background: 'radial-gradient(ellipse at 50% 40%, rgba(10,10,10,0.3) 0%, rgba(10,10,10,0.85) 100%)',
+              pointerEvents: 'none',
+            }} />
 
-            {cardImage && (
+            {/* Brand mark — mirrors the splash as a bookend */}
+            <div style={{
+              position: 'relative',
+              zIndex: 2,
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              gap: '0.4rem',
+              opacity: 0,
+              animation: 'rewardBrandReveal 2s cubic-bezier(0.16, 1, 0.3, 1) 0.3s forwards',
+            }}>
+              {/* Thin accent line above */}
               <div style={{
-                width: '200px',
-                height: '300px',
-                borderRadius: '12px',
-                overflow: 'hidden',
-                boxShadow: '0 20px 60px rgba(0,0,0,0.6), 0 0 40px rgba(130,60,255,0.15)',
-                marginBottom: '1.5rem',
-                border: '1px solid rgba(255,255,255,0.08)',
+                width: '40px',
+                height: '1px',
+                background: 'rgba(255,255,255,0.3)',
+                marginBottom: '1rem',
+              }} />
+
+              <div style={{
+                fontSize: 'clamp(2.8rem, 9vw, 4.5rem)',
+                fontWeight: 200,
+                color: '#fff',
+                letterSpacing: '0.4em',
+                textTransform: 'uppercase',
+                textIndent: '0.4em',
               }}>
-                <img
-                  src={cardImage}
-                  alt="Your Duo World moment"
-                  style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                />
+                DUO
               </div>
-            )}
+              <div style={{
+                fontSize: 'clamp(0.65rem, 2.2vw, 0.9rem)',
+                color: 'rgba(255,255,255,0.5)',
+                letterSpacing: '0.5em',
+                fontWeight: 300,
+                textIndent: '0.5em',
+              }}>
+                DESIGN
+              </div>
+
+              {/* Thin accent line below */}
+              <div style={{
+                width: '40px',
+                height: '1px',
+                background: 'rgba(255,255,255,0.3)',
+                marginTop: '1rem',
+              }} />
+            </div>
 
             {/* Primary CTA */}
             <a
@@ -680,92 +707,84 @@ export function EndingSequence() {
               target="_blank"
               rel="noopener noreferrer"
               style={{
+                position: 'relative',
+                zIndex: 2,
                 display: 'block',
                 background: '#fff',
                 color: '#0a0a0a',
                 border: 'none',
                 borderRadius: '50px',
-                padding: '14px 32px',
-                fontSize: '0.8rem',
+                padding: '14px 36px',
+                fontSize: '0.75rem',
                 fontWeight: 700,
                 cursor: 'pointer',
-                letterSpacing: '0.1em',
+                letterSpacing: '0.12em',
                 textDecoration: 'none',
                 textAlign: 'center',
-                marginBottom: '1rem',
+                marginTop: '2.5rem',
+                opacity: 0,
+                animation: 'fadeIn 1s ease 1.5s forwards',
               }}
             >
               CREATE WITH DUO
             </a>
 
-            {/* Secondary actions */}
-            <div style={{ display: 'flex', gap: '12px', marginBottom: '1.5rem' }}>
-              <button
-                onClick={handleShare}
+            {/* Secondary actions — subtle, below the fold */}
+            <div style={{
+              position: 'absolute',
+              bottom: 'max(8%, calc(env(safe-area-inset-bottom, 0px) + 24px))',
+              left: '50%',
+              transform: 'translateX(-50%)',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              gap: '1rem',
+              zIndex: 2,
+              opacity: 0,
+              animation: 'fadeIn 0.8s ease 2.5s forwards',
+            }}>
+              <div style={{ display: 'flex', gap: '20px' }}>
+                <button
+                  onClick={handleShare}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    color: 'rgba(255,255,255,0.35)',
+                    fontSize: '0.6rem',
+                    cursor: 'pointer',
+                    letterSpacing: '0.15em',
+                  }}
+                >
+                  SHARE
+                </button>
+                <button
+                  onClick={handleReplay}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    color: 'rgba(255,255,255,0.35)',
+                    fontSize: '0.6rem',
+                    cursor: 'pointer',
+                    letterSpacing: '0.15em',
+                  }}
+                >
+                  EXPLORE AGAIN
+                </button>
+              </div>
+              <a
+                href="https://instagram.com/amelielolie"
+                target="_blank"
+                rel="noopener noreferrer"
                 style={{
-                  background: 'rgba(255,255,255,0.1)',
-                  color: '#fff',
-                  border: '1px solid rgba(255,255,255,0.2)',
-                  borderRadius: '50px',
-                  padding: '10px 22px',
-                  fontSize: '0.72rem',
-                  fontWeight: 600,
-                  cursor: 'pointer',
+                  color: 'rgba(255,255,255,0.18)',
+                  fontSize: '0.5rem',
                   letterSpacing: '0.08em',
-                  backdropFilter: 'blur(8px)',
-                  WebkitBackdropFilter: 'blur(8px)',
+                  textDecoration: 'none',
                 }}
               >
-                SHARE
-              </button>
-              <button
-                onClick={downloadImage}
-                style={{
-                  background: 'rgba(255,255,255,0.1)',
-                  color: '#fff',
-                  border: '1px solid rgba(255,255,255,0.2)',
-                  borderRadius: '50px',
-                  padding: '10px 22px',
-                  fontSize: '0.72rem',
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                  letterSpacing: '0.08em',
-                  backdropFilter: 'blur(8px)',
-                  WebkitBackdropFilter: 'blur(8px)',
-                }}
-              >
-                SAVE
-              </button>
+                @amelielolie
+              </a>
             </div>
-
-            <button
-              onClick={handleReplay}
-              style={{
-                background: 'none',
-                border: 'none',
-                color: 'rgba(255,255,255,0.4)',
-                fontSize: '0.72rem',
-                cursor: 'pointer',
-                letterSpacing: '0.12em',
-                marginBottom: '1.5rem',
-              }}
-            >
-              TRY ANOTHER RUN
-            </button>
-
-            <a
-              href="https://instagram.com/amelielolie"
-              target="_blank"
-              rel="noopener noreferrer"
-              style={{
-                color: 'rgba(255,255,255,0.25)',
-                fontSize: '0.55rem',
-                letterSpacing: '0.08em',
-                textDecoration: 'none',
-              }}
-            >
-              AI Experience @amelielolie
-            </a>
           </div>
         )}
       </div>

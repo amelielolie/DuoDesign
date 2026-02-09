@@ -93,6 +93,32 @@ html, body, #root {
   100%    { background-position: 0% 0%; }
 }
 
+@keyframes spriteKick {
+  0%      { background-position: 0% 0%; }
+  11.11%  { background-position: 50% 0%; }
+  22.22%  { background-position: 100% 0%; }
+  33.33%  { background-position: 0% 50%; }
+  44.44%  { background-position: 50% 50%; }
+  55.55%  { background-position: 100% 50%; }
+  66.66%  { background-position: 0% 100%; }
+  77.77%  { background-position: 50% 100%; }
+  88.88%  { background-position: 100% 100%; }
+  100%    { background-position: 100% 100%; }
+}
+
+@keyframes spriteDance {
+  0%      { background-position: 0% 0%; }
+  11.11%  { background-position: 50% 0%; }
+  22.22%  { background-position: 100% 0%; }
+  33.33%  { background-position: 0% 50%; }
+  44.44%  { background-position: 50% 50%; }
+  55.55%  { background-position: 100% 50%; }
+  66.66%  { background-position: 0% 100%; }
+  77.77%  { background-position: 50% 100%; }
+  88.88%  { background-position: 100% 100%; }
+  100%    { background-position: 0% 0%; }
+}
+
 @keyframes characterEnter {
   0% {
     transform: translateY(-120vh) scaleX(var(--char-dir, 1));
@@ -272,6 +298,25 @@ html, body, #root {
   100% {
     transform: translateX(calc(var(--dx, 0px) * 3)) translateY(-20px) scale(0.3);
     opacity: 0;
+  }
+}
+
+/* === Reward Brand Reveal === */
+
+@keyframes rewardBrandReveal {
+  0% {
+    opacity: 0;
+    transform: scale(0.95);
+    filter: blur(6px);
+  }
+  50% {
+    opacity: 1;
+    filter: blur(0px);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+    filter: blur(0px);
   }
 }
 
