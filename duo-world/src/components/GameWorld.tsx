@@ -29,7 +29,7 @@ function seededRandom(i: number, seed: number): number {
   return x - Math.floor(x)
 }
 
-const BILL_COUNT = 20
+const BILL_COUNT = 30
 const BILL_POSITIONS = Array.from({ length: BILL_COUNT }, (_, i) => ({
   x: 0.12 + (i / BILL_COUNT) * 0.78,
   y: 20 + seededRandom(i, 100) * 35,

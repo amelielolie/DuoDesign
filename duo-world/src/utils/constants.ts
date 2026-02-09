@@ -1,5 +1,5 @@
 // World total width (in viewport widths)
-export const WORLD_WIDTH = 8 // 8x screen widths total
+export const WORLD_WIDTH = 12 // 12x screen widths total
 
 // Zone definitions along the X axis (as fraction of WORLD_WIDTH)
 export const ZONES = {
