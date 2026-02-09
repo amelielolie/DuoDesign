@@ -22,11 +22,11 @@ function getZoneOpacity(progress: number, zoneStart: number, zoneEnd: number): n
 }
 
 export function Particles({ progress }: { progress: number }) {
-  const neonOpacity = getZoneOpacity(progress, 0, 0.25)
-  const plazaOpacity = getZoneOpacity(progress, 0.25, 0.5)
-  const rainOpacity = getZoneOpacity(progress, 0.5, 0.75)
-  const natureOpacity = getZoneOpacity(progress, 0.75, 1.0)
-  const blizzardIntensity = progress >= 0.75 ? Math.min(1, (progress - 0.75) / 0.25) : 0
+  const neonOpacity = getZoneOpacity(progress, 0, 0.20)
+  const plazaOpacity = getZoneOpacity(progress, 0.20, 0.40)
+  const rainOpacity = getZoneOpacity(progress, 0.40, 0.60)
+  const natureOpacity = getZoneOpacity(progress, 0.60, 1.0)
+  const blizzardIntensity = progress >= 0.60 ? Math.min(1, (progress - 0.60) / 0.40) : 0
 
   const neonSparks = useMemo<ParticleData[]>(() => (
     Array.from({ length: 24 }, () => ({

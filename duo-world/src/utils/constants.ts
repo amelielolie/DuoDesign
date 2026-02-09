@@ -2,11 +2,12 @@
 export const WORLD_WIDTH = 12 // 12x screen widths total
 
 // Zone definitions along the X axis (as fraction of WORLD_WIDTH)
+// Blizzard zone gets 40% of the world for a longer finale
 export const ZONES = {
-  'neon-alley': { start: 0, end: 0.25 },
-  'open-plaza': { start: 0.25, end: 0.5 },
-  'rain-corridor': { start: 0.5, end: 0.75 },
-  'nature-finale': { start: 0.75, end: 1 },
+  'neon-alley': { start: 0, end: 0.20 },
+  'open-plaza': { start: 0.20, end: 0.40 },
+  'rain-corridor': { start: 0.40, end: 0.60 },
+  'nature-finale': { start: 0.60, end: 1 },
 } as const
 
 // Zone background images
@@ -22,10 +23,10 @@ export const FALLBACK_PANORAMIC = '/backgrounds/panoramic-city.jpg'
 
 // Photo spot positions (as fraction of WORLD_WIDTH)
 export const PHOTO_SPOTS = [
-  { x: 0.12, zone: 'neon-alley' as const },
-  { x: 0.37, zone: 'open-plaza' as const },
-  { x: 0.62, zone: 'rain-corridor' as const },
-  { x: 0.87, zone: 'nature-finale' as const },
+  { x: 0.10, zone: 'neon-alley' as const },
+  { x: 0.30, zone: 'open-plaza' as const },
+  { x: 0.50, zone: 'rain-corridor' as const },
+  { x: 0.80, zone: 'nature-finale' as const },
 ]
 
 // Ending trigger position (fraction of total)

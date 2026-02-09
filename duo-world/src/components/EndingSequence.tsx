@@ -445,8 +445,8 @@ export function EndingSequence() {
                 muted
                 playsInline
                 preload="auto"
-                controls={videoError && !isIOS}
-                controlsList="nodownload noplaybackrate"
+                controls={false}
+                controlsList="nodownload noplaybackrate nofullscreen"
                 disablePictureInPicture
                 poster="/avatars/look1.png"
                 onPlay={handlePlay}
@@ -486,7 +486,7 @@ export function EndingSequence() {
               />
             )}
 
-            {/* Tap to unmute — shows when playing muted (iPhone) */}
+            {/* Tap to unmute — prominent button when playing muted */}
             {videoStarted && videoMuted && (
               <div
                 onClick={handleUnmute}
@@ -494,33 +494,31 @@ export function EndingSequence() {
                   position: 'absolute',
                   inset: 0,
                   display: 'flex',
-                  alignItems: 'flex-end',
+                  alignItems: 'center',
                   justifyContent: 'center',
-                  paddingBottom: '12%',
                   cursor: 'pointer',
                 }}
               >
                 <div style={{
-                  background: 'rgba(0,0,0,0.55)',
-                  backdropFilter: 'blur(4px)',
-                  WebkitBackdropFilter: 'blur(4px)',
+                  background: 'rgba(255,255,255,0.95)',
                   borderRadius: '999px',
-                  padding: '0.5rem 1.1rem',
+                  padding: '0.9rem 2rem',
                   display: 'flex',
                   alignItems: 'center',
-                  gap: '0.4rem',
-                  animation: 'fadeIn 0.5s ease',
+                  gap: '0.5rem',
+                  animation: 'fadeIn 0.4s ease',
+                  boxShadow: '0 4px 24px rgba(0,0,0,0.4)',
                 }}>
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.9)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#0a0a0a" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
                     <line x1="23" y1="9" x2="17" y2="15" />
                     <line x1="17" y1="9" x2="23" y2="15" />
                   </svg>
                   <span style={{
-                    color: 'rgba(255,255,255,0.9)',
-                    fontSize: '0.65rem',
-                    fontWeight: 600,
-                    letterSpacing: '0.1em',
+                    color: '#0a0a0a',
+                    fontSize: '0.8rem',
+                    fontWeight: 700,
+                    letterSpacing: '0.12em',
                   }}>
                     TAP TO UNMUTE
                   </span>
@@ -650,14 +648,17 @@ export function EndingSequence() {
               }}
               style={{
                 position: 'absolute',
-                top: '18px',
-                right: '18px',
-                background: 'none',
-                border: 'none',
-                color: 'rgba(255,255,255,0.6)',
+                top: 'calc(env(safe-area-inset-top, 0px) + 18px)',
+                right: 'calc(env(safe-area-inset-right, 0px) + 18px)',
+                background: 'rgba(0,0,0,0.4)',
+                border: '1px solid rgba(255,255,255,0.2)',
+                borderRadius: '50px',
+                padding: '8px 20px',
+                color: 'rgba(255,255,255,0.8)',
                 fontSize: '0.7rem',
                 letterSpacing: '0.1em',
                 cursor: 'pointer',
+                zIndex: 10,
               }}
             >
               SKIP

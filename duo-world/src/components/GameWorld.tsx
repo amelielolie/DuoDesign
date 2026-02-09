@@ -9,7 +9,7 @@ import type { ZoneId } from '../store/gameStore'
 
 // Zone background paths in order
 const ZONE_ORDER: ZoneId[] = ['neon-alley', 'open-plaza', 'rain-corridor', 'nature-finale']
-const ZONE_BOUNDARIES = [0, 0.25, 0.5, 0.75, 1.0]
+const ZONE_BOUNDARIES = [0, 0.20, 0.40, 0.60, 1.0]
 
 function getZoneBgOpacity(progress: number, zoneIdx: number): number {
   const start = ZONE_BOUNDARIES[zoneIdx]
@@ -29,24 +29,18 @@ function seededRandom(i: number, seed: number): number {
   return x - Math.floor(x)
 }
 
-const BILL_COUNT = 30
+// Regular bills across first 3 zones (0.04 to 0.57)
+const BILL_COUNT = 20
 const BILL_POSITIONS = Array.from({ length: BILL_COUNT }, (_, i) => ({
-  x: 0.12 + (i / BILL_COUNT) * 0.61,
+  x: 0.04 + (i / BILL_COUNT) * 0.53,
   y: 20 + seededRandom(i, 100) * 35,
 }))
 
-const FROZEN_BILLS = [
-  { trigger: 0.76, y: 30 },
-  { trigger: 0.78, y: 44 },
-  { trigger: 0.80, y: 22 },
-  { trigger: 0.82, y: 38 },
-  { trigger: 0.84, y: 26 },
-  { trigger: 0.86, y: 42 },
-  { trigger: 0.87, y: 34 },
-  { trigger: 0.89, y: 48 },
-  { trigger: 0.91, y: 24 },
-  { trigger: 0.93, y: 36 },
-]
+// Frozen bills across blizzard zone (0.63 to 0.92)
+const FROZEN_BILLS = Array.from({ length: 10 }, (_, i) => ({
+  trigger: 0.63 + (i / 10) * 0.29,
+  y: 20 + seededRandom(i, 200) * 35,
+}))
 
 let videoPreloaded = false
 function preloadEndingVideo() {
@@ -171,7 +165,7 @@ export function GameWorld() {
     const endTimer = setTimeout(() => {
       setDanceTextVisible(false)
       triggerEndingVideo()
-    }, 3500)
+    }, 2000)
     return () => {
       clearTimeout(textTimer)
       clearTimeout(endTimer)
@@ -279,7 +273,7 @@ export function GameWorld() {
 
   // Frozen bill collision
   useEffect(() => {
-    if (worldX < 0.72) return
+    if (worldX < 0.58) return
     const winH = windowSizeRef.current.h
     FROZEN_BILLS.forEach((bill, i) => {
       if (collectedFrozenBills.has(i)) return
@@ -726,7 +720,7 @@ export function GameWorld() {
       })}
 
       {/* Frozen dollar bills */}
-      {worldX >= 0.72 && FROZEN_BILLS.map((bill, i) => {
+      {worldX >= 0.58 && FROZEN_BILLS.map((bill, i) => {
         if (collectedFrozenBills.has(i)) return null
         const dist = displayWorldX - bill.trigger
         if (dist < -0.05 || dist > 0.05) return null
