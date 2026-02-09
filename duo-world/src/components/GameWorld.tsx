@@ -846,7 +846,7 @@ export function GameWorld() {
       ))}
 
       {/* === HUD === */}
-      {/* Top bar with unified layout */}
+      {/* Top bar with unified layout — hidden during dance */}
       <div style={{
         position: 'absolute',
         top: 0,
@@ -855,6 +855,9 @@ export function GameWorld() {
         padding: 'env(safe-area-inset-top, 12px) 16px 0',
         zIndex: 20,
         animation: 'hudSlideIn 0.6s ease-out',
+        opacity: phase === 'dancing' ? 0 : 1,
+        transition: 'opacity 0.5s ease',
+        pointerEvents: phase === 'dancing' ? 'none' : 'auto',
       }}>
         {/* Progress bar */}
         <div style={{
@@ -883,7 +886,7 @@ export function GameWorld() {
           height: '0px',
           marginTop: '-5px',
         }}>
-          {[0.25, 0.5, 0.75].map((pos) => (
+          {[0.20, 0.40, 0.60].map((pos) => (
             <div key={pos} style={{
               position: 'absolute',
               left: `${pos * 100}%`,
@@ -974,8 +977,8 @@ export function GameWorld() {
         </div>
       </div>
 
-      {/* Combo streak */}
-      {streak > 1 && (
+      {/* Combo streak — hidden during dance */}
+      {streak > 1 && phase !== 'dancing' && (
         <div style={{
           position: 'absolute',
           top: '14%',
@@ -1041,7 +1044,7 @@ export function GameWorld() {
         maxWidth: '280px',
         aspectRatio: '1 / 1.3',
         backgroundImage: phase === 'dancing'
-          ? 'url(/avatars/sprite-dance-clean.png)'
+          ? 'url(/avatars/sprite-dance-clean.png?v=2)'
           : kicking
             ? 'url(/avatars/sprite-kick-clean.png)'
             : jumping

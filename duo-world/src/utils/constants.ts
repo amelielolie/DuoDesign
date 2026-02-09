@@ -30,7 +30,7 @@ export const PHOTO_SPOTS = [
 ]
 
 // Ending trigger position (fraction of total)
-export const ENDING_TRIGGER = 0.95
+export const ENDING_TRIGGER = 0.98
 
 // Character sprite sheets
 export const CHARACTER = {

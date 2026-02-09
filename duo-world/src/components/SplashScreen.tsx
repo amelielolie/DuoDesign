@@ -45,7 +45,7 @@ const PRELOAD_IMAGES = [
   '/avatars/sprite-idle-clean.png',
   '/avatars/sprite-jump-clean.png',
   '/avatars/sprite-kick-clean.png',
-  '/avatars/sprite-dance-clean.png',
+  '/avatars/sprite-dance-clean.png?v=2',
 ]
 
 function preloadImages(): Promise<void> {
