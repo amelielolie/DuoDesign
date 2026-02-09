@@ -87,6 +87,13 @@ export function EndingSequence() {
     }
   }, [clearRetryTimer])
 
+  // Preload the poster image so it's ready immediately when the video mounts.
+  // This prevents iOS users from seeing a black screen before the play button.
+  useEffect(() => {
+    const img = new Image()
+    img.src = '/avatars/look1.png'
+  }, [])
+
   // Create video URL and reset state when entering ending phase.
   // URL is created HERE only — not in useState — so the video element
   // mounts exactly once with the correct src (no double-request).
@@ -108,15 +115,20 @@ export function EndingSequence() {
     return () => clearTimeout(cardTimer)
   }, [phase, clearRetryTimer, resetVideoUiState, activeVideoSources, shouldCacheBust])
 
-  // If autoplay doesn't fire within 1.5s, show play button.
-  // Short timeout so iPhone users aren't staring at a black screen.
+  // Show play button quickly so users aren't staring at a black screen.
+  // On iOS, show immediately — muted autoplay is unreliable on iOS Safari.
+  // On other platforms, give autoplay 800ms to kick in.
   useEffect(() => {
     if (phase !== 'ending' || !videoUrl || videoStarted) return
+    if (isIOS) {
+      setShowPlayButton(true)
+      return
+    }
     const timer = setTimeout(() => {
       if (!videoStarted) setShowPlayButton(true)
-    }, 1500)
+    }, 800)
     return () => clearTimeout(timer)
-  }, [phase, videoUrl, videoStarted])
+  }, [phase, videoUrl, videoStarted, isIOS])
 
   useEffect(() => {
     if (phase !== 'ending' || !videoUrl) return
@@ -130,8 +142,12 @@ export function EndingSequence() {
     // Don't call video.load() — the key prop change already triggers a load.
     // Calling it again causes a double-request, especially costly on iOS mobile.
 
-    // On iPhone, muted autoplay is the safest automatic path. If it fails,
-    // the explicit play CTA remains available.
+    // On iOS, don't attempt autoplay at all — it's unreliable on iOS Safari
+    // and a failed play() triggers the native broken-play-button icon.
+    // Instead, let the user tap the custom PLAY VIDEO button (shown immediately).
+    if (isIOS) return
+
+    // On non-iOS, attempt muted autoplay after a short delay.
     const timer = window.setTimeout(() => {
       void video.play().catch(() => {
         setShowPlayButton(true)
@@ -139,7 +155,7 @@ export function EndingSequence() {
     }, 60)
 
     return () => window.clearTimeout(timer)
-  }, [phase, videoUrl])
+  }, [phase, videoUrl, isIOS])
 
   useEffect(() => {
     if (phase !== 'ending' || !videoUrl) return
@@ -194,6 +210,31 @@ export function EndingSequence() {
   const retryVideo = useCallback(async () => {
     resetVideoUiState()
     setRangeProbeStatus('idle')
+
+    // On iOS, skip cycling through source URLs and jump straight to blob fallback.
+    // iOS Safari's media pipeline is strict — if the first source failed, alternative
+    // URLs to the same file are unlikely to help. The blob approach bypasses
+    // range-request issues and content-type mismatches.
+    if (isIOS) {
+      if (blobVideoUrlRef.current) {
+        setVideoSourceIndex(activeVideoSources.length)
+        setVideoUrl(blobVideoUrlRef.current)
+        setRangeProbeStatus('ok')
+        setShowPlayButton(true)
+        return
+      }
+      const fallbackReady = await prepareBlobFallback()
+      if (fallbackReady) {
+        setShowPlayButton(true)
+      } else {
+        setVideoError(true)
+        setVideoErrorLabel('network')
+        setShowPlayButton(true)
+      }
+      return
+    }
+
+    // Non-iOS: cycle through source URLs first, then blob fallback.
     if (videoSourceIndex < activeVideoSources.length - 1) {
       const next = videoSourceIndex + 1
       setVideoSourceIndex(next)
@@ -215,7 +256,7 @@ export function EndingSequence() {
       setVideoErrorLabel('network')
       setShowPlayButton(true)
     }
-  }, [prepareBlobFallback, resetVideoUiState, videoSourceIndex, activeVideoSources, shouldCacheBust])
+  }, [prepareBlobFallback, resetVideoUiState, videoSourceIndex, activeVideoSources, shouldCacheBust, isIOS])
 
   const markVideoFailure = useCallback((label: string) => {
     setVideoError(true)
@@ -400,11 +441,11 @@ export function EndingSequence() {
                 key={videoUrl}
                 ref={videoRef}
                 src={videoUrl}
-                autoPlay
+                autoPlay={!isIOS}
                 muted
                 playsInline
                 preload="auto"
-                controls={isIOS || videoError}
+                controls={videoError && !isIOS}
                 controlsList="nodownload noplaybackrate"
                 disablePictureInPicture
                 poster="/avatars/look1.png"
@@ -461,8 +502,8 @@ export function EndingSequence() {
               >
                 <div style={{
                   background: 'rgba(0,0,0,0.55)',
-                  backdropFilter: 'blur(6px)',
-                  WebkitBackdropFilter: 'blur(6px)',
+                  backdropFilter: 'blur(4px)',
+                  WebkitBackdropFilter: 'blur(4px)',
                   borderRadius: '999px',
                   padding: '0.5rem 1.1rem',
                   display: 'flex',
@@ -487,8 +528,9 @@ export function EndingSequence() {
               </div>
             )}
 
-            {/* Play button — shows if autoplay didn't fire in 1.5s (iPhone) */}
-            {showPlayButton && !videoStarted && !videoError && (
+            {/* Play button — shows immediately on iOS, after 800ms on others.
+                On iOS also shows during error state since native controls are hidden. */}
+            {showPlayButton && !videoStarted && (!videoError || isIOS) && (
               <button
                 onClick={handlePlayVideo}
                 style={{
@@ -496,18 +538,25 @@ export function EndingSequence() {
                   left: '50%',
                   top: '50%',
                   transform: 'translate(-50%, -50%)',
-                  background: '#fff',
+                  background: 'rgba(255,255,255,0.95)',
                   color: '#0a0a0a',
                   border: 'none',
                   borderRadius: '999px',
-                  padding: '0.7rem 1.4rem',
-                  fontSize: '0.7rem',
-                  letterSpacing: '0.11em',
+                  padding: '0.9rem 2rem',
+                  fontSize: '0.8rem',
+                  letterSpacing: '0.12em',
                   fontWeight: 700,
                   cursor: 'pointer',
-                  animation: 'fadeIn 0.4s ease',
+                  animation: 'fadeIn 0.3s ease',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.5rem',
+                  boxShadow: '0 4px 24px rgba(0,0,0,0.4)',
                 }}
               >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="#0a0a0a" xmlns="http://www.w3.org/2000/svg">
+                  <polygon points="6,3 20,12 6,21" />
+                </svg>
                 PLAY VIDEO
               </button>
             )}

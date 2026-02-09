@@ -31,19 +31,21 @@ function seededRandom(i: number, seed: number): number {
 
 const BILL_COUNT = 30
 const BILL_POSITIONS = Array.from({ length: BILL_COUNT }, (_, i) => ({
-  x: 0.12 + (i / BILL_COUNT) * 0.78,
+  x: 0.12 + (i / BILL_COUNT) * 0.61,
   y: 20 + seededRandom(i, 100) * 35,
 }))
 
 const FROZEN_BILLS = [
-  { trigger: 0.76, y: 28 },
-  { trigger: 0.79, y: 42 },
-  { trigger: 0.82, y: 25 },
-  { trigger: 0.84, y: 38 },
-  { trigger: 0.87, y: 32 },
-  { trigger: 0.89, y: 45 },
-  { trigger: 0.91, y: 22 },
-  { trigger: 0.93, y: 35 },
+  { trigger: 0.76, y: 30 },
+  { trigger: 0.78, y: 44 },
+  { trigger: 0.80, y: 22 },
+  { trigger: 0.82, y: 38 },
+  { trigger: 0.84, y: 26 },
+  { trigger: 0.86, y: 42 },
+  { trigger: 0.87, y: 34 },
+  { trigger: 0.89, y: 48 },
+  { trigger: 0.91, y: 24 },
+  { trigger: 0.93, y: 36 },
 ]
 
 let videoPreloaded = false
@@ -82,6 +84,7 @@ export function GameWorld() {
   const setPhotoSpotNearby = useGameStore((s) => s.setPhotoSpotNearby)
   const setCurrentZone = useGameStore((s) => s.setCurrentZone)
   const triggerEnding = useGameStore((s) => s.triggerEnding)
+  const triggerEndingVideo = useGameStore((s) => s.triggerEndingVideo)
   const endingTriggered = useGameStore((s) => s.endingTriggered)
   const walking = useGameStore((s) => s.walking)
   const direction = useGameStore((s) => s.direction)
@@ -129,6 +132,7 @@ export function GameWorld() {
   const [entered, setEntered] = useState(false)
   const [landingDust, setLandingDust] = useState<Array<{ id: number; x: number }>>([])
   const [zoneBgErrors, setZoneBgErrors] = useState<Set<number>>(new Set())
+  const [danceTextVisible, setDanceTextVisible] = useState(false)
   const effectIdRef = useRef(0)
   const stripRefs = useRef<(HTMLDivElement | null)[]>([null, null, null, null])
 
@@ -153,6 +157,26 @@ export function GameWorld() {
       return () => clearTimeout(timer)
     }
   }, [phase, entered])
+
+  // Dance phase: show text after a short delay, then transition to ending video
+  useEffect(() => {
+    if (phase !== 'dancing') return
+    // Stop all movement
+    directionRef.current = 0
+    velocityRef.current = 0
+    setWalking(false)
+    // Show celebratory text after a brief moment
+    const textTimer = setTimeout(() => setDanceTextVisible(true), 600)
+    // Auto-transition to ending video after ~3.5 seconds
+    const endTimer = setTimeout(() => {
+      setDanceTextVisible(false)
+      triggerEndingVideo()
+    }, 3500)
+    return () => {
+      clearTimeout(textTimer)
+      clearTimeout(endTimer)
+    }
+  }, [phase, setWalking, triggerEndingVideo])
 
   // Determine current zone, trigger ending, zone announcements
   useEffect(() => {
@@ -516,7 +540,7 @@ export function GameWorld() {
     }
   }, [phase])
 
-  if (phase !== 'exploring' && phase !== 'photo-mode') return null
+  if (phase !== 'exploring' && phase !== 'photo-mode' && phase !== 'dancing') return null
 
   const scrollX = displayWorldX * maxScroll
   const parallaxFactor = maxScroll / windowSizeRef.current.w * 100 + 100
@@ -1017,25 +1041,31 @@ export function GameWorld() {
       {/* Character */}
       <div style={{
         position: 'absolute',
-        bottom: `${12 + (jumpY / windowSizeRef.current.h) * 100}%`,
+        bottom: `${12 + (phase === 'dancing' ? 0 : (jumpY / windowSizeRef.current.h) * 100)}%`,
         left: '38%',
         width: '45vw',
         maxWidth: '280px',
         aspectRatio: '1 / 1.3',
-        backgroundImage: kicking
-          ? 'url(/avatars/sprite-kick-clean.png)'
-          : jumping
-            ? 'url(/avatars/sprite-jump-clean.png)'
-            : walking
-              ? 'url(/avatars/sprite-walk-clean.png)'
-              : 'url(/avatars/sprite-idle-clean.png)',
-        backgroundSize: '300% 300%',
-        backgroundPosition: (!walking && !jumping && !kicking) ? '0% 0%' : undefined,
-        animation: !entered
-          ? 'characterEnter 0.9s cubic-bezier(0.22, 1, 0.36, 1) forwards'
+        backgroundImage: phase === 'dancing'
+          ? 'url(/avatars/sprite-dance-clean.png)'
           : kicking
-            ? 'spriteKick 0.7s steps(1) forwards'
-            : (walking || jumping) ? 'spriteWalk 0.8s steps(1) infinite' : undefined,
+            ? 'url(/avatars/sprite-kick-clean.png)'
+            : jumping
+              ? 'url(/avatars/sprite-jump-clean.png)'
+              : walking
+                ? 'url(/avatars/sprite-walk-clean.png)'
+                : 'url(/avatars/sprite-idle-clean.png)',
+        backgroundSize: '300% 300%',
+        backgroundPosition: phase === 'dancing'
+          ? undefined
+          : (!walking && !jumping && !kicking) ? '0% 0%' : undefined,
+        animation: phase === 'dancing'
+          ? 'spriteDance 0.8s steps(1) infinite'
+          : !entered
+            ? 'characterEnter 0.9s cubic-bezier(0.22, 1, 0.36, 1) forwards'
+            : kicking
+              ? 'spriteKick 0.7s steps(1) forwards'
+              : (walking || jumping) ? 'spriteWalk 0.8s steps(1) infinite' : undefined,
         transform: entered ? (direction === -1 ? 'scaleX(-1)' : undefined) : undefined,
         ...(!entered ? { '--char-dir': direction === -1 ? -1 : 1 } as React.CSSProperties : {}),
         filter: 'drop-shadow(0 2px 12px rgba(0,0,0,0.7))',
@@ -1066,7 +1096,7 @@ export function GameWorld() {
       <Particles progress={displayWorldX} />
 
       {/* Controls instruction */}
-      {worldX < 0.02 && entered && (
+      {worldX < 0.02 && entered && phase === 'exploring' && (
         <div style={{
           position: 'absolute',
           bottom: 'max(5%, calc(env(safe-area-inset-bottom, 0px) + 12px))',
@@ -1086,6 +1116,60 @@ export function GameWorld() {
           <div style={{ opacity: 0.6 }}>SWIPE UP TO JUMP</div>
           <div style={{ opacity: 0.4 }}>SWIPE DOWN TO KICK</div>
         </div>
+      )}
+
+      {/* Dance celebration overlay */}
+      {phase === 'dancing' && (
+        <>
+          {/* Darkened vignette */}
+          <div style={{
+            position: 'absolute',
+            inset: 0,
+            background: 'radial-gradient(ellipse at 50% 60%, rgba(0,0,0,0.1) 0%, rgba(0,0,0,0.55) 100%)',
+            pointerEvents: 'none',
+            zIndex: 12,
+            animation: 'fadeIn 0.8s ease',
+          }} />
+
+          {/* "JOURNEY COMPLETE" text */}
+          {danceTextVisible && (
+            <div style={{
+              position: 'absolute',
+              top: '28%',
+              left: '50%',
+              transform: 'translate(-50%, -50%)',
+              zIndex: 25,
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              gap: '10px',
+              animation: 'danceTextReveal 1.2s cubic-bezier(0.16, 1, 0.3, 1) forwards',
+              pointerEvents: 'none',
+            }}>
+              <div style={{
+                width: '50px',
+                height: '1px',
+                background: 'rgba(255,255,255,0.4)',
+              }} />
+              <div style={{
+                fontSize: 'clamp(1.4rem, 6vw, 2.4rem)',
+                fontWeight: 200,
+                color: 'rgba(255,255,255,0.9)',
+                letterSpacing: '0.35em',
+                textIndent: '0.35em',
+                textTransform: 'uppercase',
+                textShadow: '0 0 40px rgba(200, 220, 255, 0.4)',
+              }}>
+                Journey Complete
+              </div>
+              <div style={{
+                width: '50px',
+                height: '1px',
+                background: 'rgba(255,255,255,0.4)',
+              }} />
+            </div>
+          )}
+        </>
       )}
     </div>
   )

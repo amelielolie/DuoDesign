@@ -320,6 +320,26 @@ html, body, #root {
   }
 }
 
+/* === Dance Celebration === */
+
+@keyframes danceTextReveal {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.85);
+    filter: blur(8px);
+  }
+  60% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1.02);
+    filter: blur(0px);
+  }
+  100% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+    filter: blur(0px);
+  }
+}
+
 /* === HUD === */
 
 @keyframes hudSlideIn {

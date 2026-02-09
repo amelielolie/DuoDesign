@@ -10,7 +10,7 @@ function SoundButton() {
   const toggleSound = useGameStore((s) => s.toggleSound)
   const phase = useGameStore((s) => s.phase)
 
-  if (phase === 'splash' || phase === 'ending' || phase === 'reward') return null
+  if (phase === 'splash' || phase === 'dancing' || phase === 'ending' || phase === 'reward') return null
 
   return (
     <button

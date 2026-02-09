@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 
-export type GamePhase = 'splash' | 'exploring' | 'photo-mode' | 'ending' | 'reward'
+export type GamePhase = 'splash' | 'exploring' | 'photo-mode' | 'dancing' | 'ending' | 'reward'
 export type ZoneId = 'neon-alley' | 'open-plaza' | 'rain-corridor' | 'nature-finale'
 
 interface GameState {
@@ -36,6 +36,7 @@ interface GameState {
   setPhotoSpotNearby: (nearby: boolean) => void
   setKicking: (kicking: boolean) => void
   triggerEnding: () => void
+  triggerEndingVideo: () => void
   collectBill: (index: number) => void
   toggleSound: () => void
   triggerCameraShake: (intensity: number) => void
@@ -82,7 +83,8 @@ export const useGameStore = create<GameState>((set) => ({
   setJumpCount: (count) => set({ jumpCount: count }),
   setPhotoSpotNearby: (nearby) => set({ photoSpotNearby: nearby }),
   setKicking: (kicking) => set({ kicking }),
-  triggerEnding: () => set({ endingTriggered: true, phase: 'ending' }),
+  triggerEnding: () => set({ endingTriggered: true, phase: 'dancing' }),
+  triggerEndingVideo: () => set({ phase: 'ending' }),
   collectBill: (index) =>
     set((state) => {
       const next = new Set(state.collectedBills)
