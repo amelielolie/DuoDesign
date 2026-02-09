@@ -743,14 +743,16 @@ export function EndingSequence() {
               opacity: 0,
               animation: 'fadeIn 0.8s ease 2.5s forwards',
             }}>
-              <div style={{ display: 'flex', gap: '20px' }}>
+              <div style={{ display: 'flex', gap: '24px' }}>
                 <button
                   onClick={handleShare}
                   style={{
-                    background: 'none',
-                    border: 'none',
-                    color: 'rgba(255,255,255,0.35)',
-                    fontSize: '0.6rem',
+                    background: 'rgba(255,255,255,0.08)',
+                    border: '1px solid rgba(255,255,255,0.15)',
+                    borderRadius: '50px',
+                    color: 'rgba(255,255,255,0.55)',
+                    fontSize: '0.7rem',
+                    padding: '10px 24px',
                     cursor: 'pointer',
                     letterSpacing: '0.15em',
                   }}
@@ -760,10 +762,12 @@ export function EndingSequence() {
                 <button
                   onClick={handleReplay}
                   style={{
-                    background: 'none',
-                    border: 'none',
-                    color: 'rgba(255,255,255,0.35)',
-                    fontSize: '0.6rem',
+                    background: 'rgba(255,255,255,0.08)',
+                    border: '1px solid rgba(255,255,255,0.15)',
+                    borderRadius: '50px',
+                    color: 'rgba(255,255,255,0.55)',
+                    fontSize: '0.7rem',
+                    padding: '10px 24px',
                     cursor: 'pointer',
                     letterSpacing: '0.15em',
                   }}
@@ -776,9 +780,9 @@ export function EndingSequence() {
                 target="_blank"
                 rel="noopener noreferrer"
                 style={{
-                  color: 'rgba(255,255,255,0.18)',
-                  fontSize: '0.5rem',
-                  letterSpacing: '0.08em',
+                  color: 'rgba(255,255,255,0.4)',
+                  fontSize: '0.65rem',
+                  letterSpacing: '0.12em',
                   textDecoration: 'none',
                 }}
               >
