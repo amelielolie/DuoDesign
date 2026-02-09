@@ -6,6 +6,7 @@ export type ZoneId = 'neon-alley' | 'open-plaza' | 'rain-corridor' | 'nature-fin
 interface GameState {
   phase: GamePhase
   currentZone: ZoneId
+  previousZone: ZoneId | null
   capturedPhotos: string[]
   worldX: number
   walking: boolean
@@ -18,6 +19,9 @@ interface GameState {
   endingTriggered: boolean
   collectedBills: Set<number>
   soundMuted: boolean
+  cameraShake: number
+  zoneAnnouncement: string | null
+  assetsReady: boolean
 
   setPhase: (phase: GamePhase) => void
   setCurrentZone: (zone: ZoneId) => void
@@ -32,12 +36,17 @@ interface GameState {
   triggerEnding: () => void
   collectBill: (index: number) => void
   toggleSound: () => void
+  triggerCameraShake: (intensity: number) => void
+  showZoneAnnouncement: (name: string) => void
+  clearZoneAnnouncement: () => void
+  setAssetsReady: (ready: boolean) => void
   reset: () => void
 }
 
 export const useGameStore = create<GameState>((set) => ({
   phase: 'splash',
   currentZone: 'neon-alley',
+  previousZone: null,
   capturedPhotos: [],
   worldX: 0,
   walking: false,
@@ -50,9 +59,16 @@ export const useGameStore = create<GameState>((set) => ({
   endingTriggered: false,
   collectedBills: new Set<number>(),
   soundMuted: false,
+  cameraShake: 0,
+  zoneAnnouncement: null,
+  assetsReady: false,
 
   setPhase: (phase) => set({ phase }),
-  setCurrentZone: (zone) => set({ currentZone: zone }),
+  setCurrentZone: (zone) =>
+    set((state) => ({
+      currentZone: zone,
+      previousZone: state.currentZone !== zone ? state.currentZone : state.previousZone,
+    })),
   addCapturedPhoto: (dataUrl) =>
     set((state) => ({ capturedPhotos: [...state.capturedPhotos, dataUrl] })),
   setWorldX: (x) => set({ worldX: x }),
@@ -70,10 +86,15 @@ export const useGameStore = create<GameState>((set) => ({
       return { collectedBills: next }
     }),
   toggleSound: () => set((state) => ({ soundMuted: !state.soundMuted })),
+  triggerCameraShake: (intensity) => set({ cameraShake: intensity }),
+  showZoneAnnouncement: (name) => set({ zoneAnnouncement: name }),
+  clearZoneAnnouncement: () => set({ zoneAnnouncement: null }),
+  setAssetsReady: (ready) => set({ assetsReady: ready }),
   reset: () =>
     set({
       phase: 'exploring',
       currentZone: 'neon-alley',
+      previousZone: null,
       capturedPhotos: [],
       worldX: 0,
       walking: false,
@@ -84,5 +105,7 @@ export const useGameStore = create<GameState>((set) => ({
       photoSpotNearby: false,
       endingTriggered: false,
       collectedBills: new Set<number>(),
+      cameraShake: 0,
+      zoneAnnouncement: null,
     }),
 }))

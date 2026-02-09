@@ -41,6 +41,7 @@ export function EndingSequence() {
   const phase = useGameStore((s) => s.phase)
   const setPhase = useGameStore((s) => s.setPhase)
   const reset = useGameStore((s) => s.reset)
+  const collectedBillCount = useGameStore((s) => s.collectedBills.size)
   const [stage, setStage] = useState<'video' | 'reward'>('video')
   const [cardImage, setCardImage] = useState<string | null>(null)
   const [videoSourceIndex, setVideoSourceIndex] = useState(0)
@@ -127,7 +128,8 @@ export function EndingSequence() {
     video.setAttribute('x-webkit-airplay', 'allow')
     video.playsInline = true
     video.muted = true
-    video.load()
+    // Don't call video.load() — the key prop change already triggers a load.
+    // Calling it again causes a double-request, especially costly on iOS mobile.
 
     // On iPhone, muted autoplay is the safest automatic path. If it fails,
     // the explicit play CTA remains available.
@@ -620,17 +622,49 @@ export function EndingSequence() {
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'center',
-            padding: '2rem',
-            animation: 'fadeIn 1s ease',
+            padding: '2rem 2rem calc(2rem + env(safe-area-inset-bottom, 0px))',
+            animation: 'fadeIn 1.2s ease',
+            width: '100%',
+            maxHeight: '100%',
+            overflowY: 'auto',
           }}>
+            {/* Journey Stats */}
+            <div style={{
+              display: 'flex',
+              gap: '24px',
+              marginBottom: '1.5rem',
+              animation: 'fadeIn 1.5s ease',
+            }}>
+              <div style={{ textAlign: 'center' }}>
+                <div style={{
+                  color: '#2ecc40',
+                  fontSize: '1.8rem',
+                  fontWeight: 800,
+                  fontVariantNumeric: 'tabular-nums',
+                }}>
+                  ${collectedBillCount}
+                </div>
+                <div style={{
+                  color: 'rgba(255,255,255,0.4)',
+                  fontSize: '0.55rem',
+                  letterSpacing: '0.15em',
+                  textTransform: 'uppercase',
+                  marginTop: '2px',
+                }}>
+                  COLLECTED
+                </div>
+              </div>
+            </div>
+
             {cardImage && (
               <div style={{
-                width: '220px',
-                height: '330px',
+                width: '200px',
+                height: '300px',
                 borderRadius: '12px',
                 overflow: 'hidden',
-                boxShadow: '0 20px 60px rgba(0,0,0,0.5)',
-                marginBottom: '2rem',
+                boxShadow: '0 20px 60px rgba(0,0,0,0.6), 0 0 40px rgba(130,60,255,0.15)',
+                marginBottom: '1.5rem',
+                border: '1px solid rgba(255,255,255,0.08)',
               }}>
                 <img
                   src={cardImage}
@@ -640,19 +674,46 @@ export function EndingSequence() {
               </div>
             )}
 
-            <div style={{ display: 'flex', gap: '16px', marginBottom: '2rem' }}>
+            {/* Primary CTA */}
+            <a
+              href="https://www.duo-designstudio.com/"
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                display: 'block',
+                background: '#fff',
+                color: '#0a0a0a',
+                border: 'none',
+                borderRadius: '50px',
+                padding: '14px 32px',
+                fontSize: '0.8rem',
+                fontWeight: 700,
+                cursor: 'pointer',
+                letterSpacing: '0.1em',
+                textDecoration: 'none',
+                textAlign: 'center',
+                marginBottom: '1rem',
+              }}
+            >
+              CREATE WITH DUO
+            </a>
+
+            {/* Secondary actions */}
+            <div style={{ display: 'flex', gap: '12px', marginBottom: '1.5rem' }}>
               <button
                 onClick={handleShare}
                 style={{
-                  background: '#fff',
-                  color: '#0a0a0a',
-                  border: 'none',
+                  background: 'rgba(255,255,255,0.1)',
+                  color: '#fff',
+                  border: '1px solid rgba(255,255,255,0.2)',
                   borderRadius: '50px',
-                  padding: '14px 28px',
-                  fontSize: '0.85rem',
+                  padding: '10px 22px',
+                  fontSize: '0.72rem',
                   fontWeight: 600,
                   cursor: 'pointer',
-                  letterSpacing: '0.05em',
+                  letterSpacing: '0.08em',
+                  backdropFilter: 'blur(8px)',
+                  WebkitBackdropFilter: 'blur(8px)',
                 }}
               >
                 SHARE
@@ -660,57 +721,36 @@ export function EndingSequence() {
               <button
                 onClick={downloadImage}
                 style={{
-                  background: 'transparent',
+                  background: 'rgba(255,255,255,0.1)',
                   color: '#fff',
-                  border: '1px solid rgba(255,255,255,0.3)',
+                  border: '1px solid rgba(255,255,255,0.2)',
                   borderRadius: '50px',
-                  padding: '14px 28px',
-                  fontSize: '0.85rem',
+                  padding: '10px 22px',
+                  fontSize: '0.72rem',
                   fontWeight: 600,
                   cursor: 'pointer',
-                  letterSpacing: '0.05em',
+                  letterSpacing: '0.08em',
+                  backdropFilter: 'blur(8px)',
+                  WebkitBackdropFilter: 'blur(8px)',
                 }}
               >
                 SAVE
               </button>
             </div>
 
-            <a
-              href="https://duodesign.com"
-              target="_blank"
-              rel="noopener noreferrer"
-              style={{
-                display: 'block',
-                background: 'linear-gradient(135deg, #2ecc40, #1a8a2a)',
-                color: '#fff',
-                border: 'none',
-                borderRadius: '50px',
-                padding: '14px 28px',
-                fontSize: '0.85rem',
-                fontWeight: 600,
-                cursor: 'pointer',
-                letterSpacing: '0.05em',
-                textDecoration: 'none',
-                textAlign: 'center',
-                marginBottom: '1.5rem',
-              }}
-            >
-              CREATE WITH DUO
-            </a>
-
             <button
               onClick={handleReplay}
               style={{
                 background: 'none',
                 border: 'none',
-                color: '#5a7a8a',
-                fontSize: '0.8rem',
+                color: 'rgba(255,255,255,0.4)',
+                fontSize: '0.72rem',
                 cursor: 'pointer',
-                letterSpacing: '0.1em',
-                marginBottom: '2rem',
+                letterSpacing: '0.12em',
+                marginBottom: '1.5rem',
               }}
             >
-              REPLAY
+              TRY ANOTHER RUN
             </button>
 
             <a
@@ -718,8 +758,8 @@ export function EndingSequence() {
               target="_blank"
               rel="noopener noreferrer"
               style={{
-                color: 'rgba(255,255,255,0.35)',
-                fontSize: '0.65rem',
+                color: 'rgba(255,255,255,0.25)',
+                fontSize: '0.55rem',
                 letterSpacing: '0.08em',
                 textDecoration: 'none',
               }}

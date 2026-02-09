@@ -75,6 +75,12 @@ export function AmbientMusic() {
 
   useEffect(() => {
     return () => {
+      // Clear the arpeggio interval
+      const arpInterval = (window as unknown as Record<string, unknown>).__duoArpInterval as number | undefined
+      if (arpInterval) {
+        clearInterval(arpInterval)
+        ;(window as unknown as Record<string, unknown>).__duoArpInterval = undefined
+      }
       if (sharedAudioCtx && sharedAudioCtx.state !== 'closed') {
         sharedAudioCtx.close()
         sharedAudioCtx = null
@@ -175,7 +181,7 @@ function setupAmbientMusic(ctx: AudioContext) {
   aG.connect(convolver)
   arp.start()
 
-  setInterval(() => {
+  const arpInterval = setInterval(() => {
     if (ctx.state !== 'running') return
     const t = ctx.currentTime
     idx = (idx + 1) % notes.length
@@ -183,6 +189,10 @@ function setupAmbientMusic(ctx: AudioContext) {
     aG.gain.setTargetAtTime(0.08, t, 0.01)
     aG.gain.setTargetAtTime(0, t + 0.15, 0.2)
   }, 600)
+  // Store interval for cleanup
+  if (typeof window !== 'undefined') {
+    (window as unknown as Record<string, unknown>).__duoArpInterval = arpInterval
+  }
 
   // Noise
   const nBuf = ctx.createBuffer(1, ctx.sampleRate * 2, ctx.sampleRate)

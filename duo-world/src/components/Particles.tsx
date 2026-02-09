@@ -1,4 +1,5 @@
 import { useMemo } from 'react'
+import { ZONE_BLEND_WIDTH } from '../utils/constants'
 
 interface ParticleData {
   x: number
@@ -9,76 +10,77 @@ interface ParticleData {
   opacity: number
 }
 
+// Calculate zone opacity with crossfade blending
+function getZoneOpacity(progress: number, zoneStart: number, zoneEnd: number): number {
+  const blend = ZONE_BLEND_WIDTH
+  if (progress < zoneStart - blend || progress > zoneEnd + blend) return 0
+  if (progress >= zoneStart + blend && progress <= zoneEnd - blend) return 1
+  if (progress < zoneStart + blend) {
+    return Math.max(0, Math.min(1, (progress - (zoneStart - blend)) / (blend * 2)))
+  }
+  return Math.max(0, Math.min(1, ((zoneEnd + blend) - progress) / (blend * 2)))
+}
+
 export function Particles({ progress }: { progress: number }) {
-  const isNeonZone = progress < 0.25
-  const isPlazaZone = progress >= 0.25 && progress < 0.5
-  const isRainZone = progress >= 0.5 && progress < 0.75
-  const isNatureZone = progress >= 0.75
-  const blizzardIntensity = isNatureZone ? Math.min(1, (progress - 0.75) / 0.25) : 0
+  const neonOpacity = getZoneOpacity(progress, 0, 0.25)
+  const plazaOpacity = getZoneOpacity(progress, 0.25, 0.5)
+  const rainOpacity = getZoneOpacity(progress, 0.5, 0.75)
+  const natureOpacity = getZoneOpacity(progress, 0.75, 1.0)
+  const blizzardIntensity = progress >= 0.75 ? Math.min(1, (progress - 0.75) / 0.25) : 0
 
   const neonSparks = useMemo<ParticleData[]>(() => (
-    Array.from({ length: 28 }, () => ({
+    Array.from({ length: 24 }, () => ({
       x: Math.random() * 100,
       y: 15 + Math.random() * 70,
-      size: 1 + Math.random() * 2,
+      size: 1.5 + Math.random() * 2.5,
       speed: 2.8 + Math.random() * 3.2,
       delay: Math.random() * 3,
-      opacity: 0.25 + Math.random() * 0.45,
+      opacity: 0.3 + Math.random() * 0.5,
     }))
   ), [])
 
   const embers = useMemo<ParticleData[]>(() => (
-    Array.from({ length: 34 }, () => ({
+    Array.from({ length: 30 }, () => ({
       x: Math.random() * 100,
       y: 40 + Math.random() * 55,
-      size: 1.5 + Math.random() * 3,
+      size: 2 + Math.random() * 3,
       speed: 3 + Math.random() * 3.5,
       delay: Math.random() * 2.5,
-      opacity: 0.25 + Math.random() * 0.3,
+      opacity: 0.3 + Math.random() * 0.35,
     }))
   ), [])
 
   const rainDrops = useMemo<ParticleData[]>(() => (
-    Array.from({ length: 72 }, () => ({
+    Array.from({ length: 60 }, () => ({
       x: Math.random() * 100,
       y: Math.random() * 100,
-      size: 1 + Math.random() * 2,
-      speed: 0.45 + Math.random() * 0.95,
+      size: 1 + Math.random() * 1.5,
+      speed: 0.4 + Math.random() * 0.8,
       delay: Math.random() * 2,
-      opacity: 0.22 + Math.random() * 0.45,
+      opacity: 0.25 + Math.random() * 0.4,
     }))
   ), [])
 
+  // Reduced from 170 to 80 for performance
   const snowflakes = useMemo<ParticleData[]>(() => (
-    Array.from({ length: 170 }, () => ({
+    Array.from({ length: 80 }, () => ({
       x: Math.random() * 120 - 10,
       y: Math.random() * 100,
       size: 2 + Math.random() * 4,
-      speed: 1 + Math.random() * 2,
+      speed: 1.2 + Math.random() * 2.5,
       delay: Math.random() * 4,
       opacity: 0.5 + Math.random() * 0.5,
     }))
   ), [])
 
-  const fireflies = useMemo<ParticleData[]>(() => (
-    Array.from({ length: 18 }, () => ({
-      x: Math.random() * 100,
-      y: 20 + Math.random() * 60,
-      size: 2 + Math.random() * 3,
-      speed: 3 + Math.random() * 5,
-      delay: Math.random() * 3,
-      opacity: 0.25 + Math.random() * 0.45,
-    }))
-  ), [])
-
   const dustMotes = useMemo<ParticleData[]>(() => (
-    Array.from({ length: 24 }, () => ({
+    Array.from({ length: 20 }, () => ({
       x: Math.random() * 100,
       y: Math.random() * 80,
       size: 2 + Math.random() * 2,
       speed: 4 + Math.random() * 6,
       delay: Math.random() * 5,
-      opacity: 0.12 + Math.random() * 0.22,
+      opacity: 0.12 + Math.random() * 0.2,
     }))
   ), [])
 
@@ -89,58 +91,72 @@ export function Particles({ progress }: { progress: number }) {
       pointerEvents: 'none',
       overflow: 'hidden',
     }}>
-      {isNeonZone && neonSparks.map((spark, i) => (
-        <div
-          key={`spark-${i}`}
-          style={{
-            position: 'absolute',
-            left: `${spark.x}%`,
-            top: `${spark.y}%`,
-            width: `${spark.size}px`,
-            height: `${spark.size}px`,
-            borderRadius: '50%',
-            background: `rgba(140, 185, 255, ${spark.opacity})`,
-            boxShadow: '0 0 10px rgba(140, 185, 255, 0.75)',
-            animation: `sparkDrift ${spark.speed}s ease-in-out ${spark.delay}s infinite alternate`,
-          }}
-        />
-      ))}
+      {/* Neon sparks - diamond/star shaped */}
+      {neonOpacity > 0 && (
+        <div style={{ opacity: neonOpacity, transition: 'opacity 0.5s ease' }}>
+          {neonSparks.map((spark, i) => (
+            <div
+              key={`spark-${i}`}
+              style={{
+                position: 'absolute',
+                left: `${spark.x}%`,
+                top: `${spark.y}%`,
+                width: `${spark.size}px`,
+                height: `${spark.size}px`,
+                background: `rgba(160, 120, 255, ${spark.opacity})`,
+                clipPath: 'polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)',
+                animation: `sparkDrift ${spark.speed}s ease-in-out ${spark.delay}s infinite alternate`,
+              }}
+            />
+          ))}
+        </div>
+      )}
 
-      {isPlazaZone && embers.map((ember, i) => (
-        <div
-          key={`ember-${i}`}
-          style={{
-            position: 'absolute',
-            left: `${ember.x}%`,
-            bottom: '-10%',
-            width: `${ember.size}px`,
-            height: `${ember.size}px`,
-            borderRadius: '50%',
-            background: `rgba(255, 205, 120, ${ember.opacity})`,
-            boxShadow: '0 0 10px rgba(255, 185, 90, 0.7)',
-            animation: `emberRise ${ember.speed}s ease-out ${ember.delay}s infinite`,
-          }}
-        />
-      ))}
+      {/* Embers - teardrop/elongated */}
+      {plazaOpacity > 0 && (
+        <div style={{ opacity: plazaOpacity, transition: 'opacity 0.5s ease' }}>
+          {embers.map((ember, i) => (
+            <div
+              key={`ember-${i}`}
+              style={{
+                position: 'absolute',
+                left: `${ember.x}%`,
+                bottom: '-10%',
+                width: `${ember.size}px`,
+                height: `${ember.size * 1.5}px`,
+                background: `rgba(255, 200, 100, ${ember.opacity})`,
+                borderRadius: '50% 50% 50% 50% / 60% 60% 40% 40%',
+                animation: `emberRise ${ember.speed}s ease-out ${ember.delay}s infinite`,
+              }}
+            />
+          ))}
+        </div>
+      )}
 
-      {isRainZone && rainDrops.map((drop, i) => (
-        <div
-          key={`rain-${i}`}
-          style={{
-            position: 'absolute',
-            left: `${drop.x}%`,
-            top: '-5%',
-            width: `${drop.size}px`,
-            height: `${drop.size * 8}px`,
-            background: `rgba(150, 200, 255, ${drop.opacity})`,
-            borderRadius: '50%',
-            animation: `rainFall ${drop.speed}s linear ${drop.delay}s infinite`,
-          }}
-        />
-      ))}
+      {/* Rain - elongated streaks */}
+      {rainOpacity > 0 && (
+        <div style={{ opacity: rainOpacity, transition: 'opacity 0.5s ease' }}>
+          {rainDrops.map((drop, i) => (
+            <div
+              key={`rain-${i}`}
+              style={{
+                position: 'absolute',
+                left: `${drop.x}%`,
+                top: '-5%',
+                width: `${drop.size}px`,
+                height: `${drop.size * 12}px`,
+                background: `linear-gradient(180deg, transparent, rgba(140, 190, 255, ${drop.opacity}), transparent)`,
+                borderRadius: '1px',
+                animation: `rainFall ${drop.speed}s linear ${drop.delay}s infinite`,
+              }}
+            />
+          ))}
+        </div>
+      )}
 
-      {isNatureZone && (
-        <>
+      {/* Snow + blizzard */}
+      {natureOpacity > 0 && (
+        <div style={{ opacity: natureOpacity, transition: 'opacity 0.5s ease' }}>
           {snowflakes.map((flake, i) => (
             <div
               key={`snow-${i}`}
@@ -156,46 +172,37 @@ export function Particles({ progress }: { progress: number }) {
               }}
             />
           ))}
-          {fireflies.map((fly, i) => (
-            <div
-              key={`firefly-${i}`}
-              style={{
-                position: 'absolute',
-                left: `${fly.x}%`,
-                top: `${fly.y}%`,
-                width: `${fly.size}px`,
-                height: `${fly.size}px`,
-                borderRadius: '50%',
-                background: `rgba(215, 250, 210, ${fly.opacity})`,
-                boxShadow: '0 0 14px rgba(215, 250, 210, 0.9)',
-                animation: `fireflyFloat ${fly.speed}s ease-in-out ${fly.delay}s infinite alternate`,
-              }}
-            />
-          ))}
+          {/* Blizzard whiteout overlay */}
           <div style={{
             position: 'absolute',
             inset: 0,
-            background: `rgba(235, 245, 255, ${0.04 + blizzardIntensity * 0.15})`,
+            background: `rgba(220, 235, 255, ${0.03 + blizzardIntensity * 0.12})`,
+            transition: 'background 1s ease',
             pointerEvents: 'none',
           }} />
-        </>
+        </div>
       )}
 
-      {!isNatureZone && !isRainZone && dustMotes.map((mote, i) => (
-        <div
-          key={`dust-${i}`}
-          style={{
-            position: 'absolute',
-            left: `${mote.x}%`,
-            top: `${mote.y}%`,
-            width: `${mote.size}px`,
-            height: `${mote.size}px`,
-            background: `rgba(150, 200, 255, ${mote.opacity})`,
-            borderRadius: '50%',
-            animation: `dustFloat ${mote.speed}s ease-in-out ${mote.delay}s infinite alternate`,
-          }}
-        />
-      ))}
+      {/* Dust motes (ambient, visible in neon + plaza zones) */}
+      {(neonOpacity > 0 || plazaOpacity > 0) && (
+        <div style={{ opacity: Math.max(neonOpacity, plazaOpacity) * 0.7, transition: 'opacity 0.5s ease' }}>
+          {dustMotes.map((mote, i) => (
+            <div
+              key={`dust-${i}`}
+              style={{
+                position: 'absolute',
+                left: `${mote.x}%`,
+                top: `${mote.y}%`,
+                width: `${mote.size}px`,
+                height: `${mote.size}px`,
+                background: `rgba(180, 200, 255, ${mote.opacity})`,
+                borderRadius: '50%',
+                animation: `dustFloat ${mote.speed}s ease-in-out ${mote.delay}s infinite alternate`,
+              }}
+            />
+          ))}
+        </div>
+      )}
     </div>
   )
 }

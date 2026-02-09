@@ -1,7 +1,6 @@
 import { useCallback, useRef, useState } from 'react'
 import { useGameStore, type ZoneId } from '../store/gameStore'
-
-const PANORAMIC_BG = '/backgrounds/panoramic-city.jpg'
+import { ZONE_BACKGROUNDS, FALLBACK_PANORAMIC } from '../utils/constants'
 const SPRITE_IDLE = '/avatars/sprite-idle-clean.png'
 const SPRITE_WALK = '/avatars/sprite-walk-clean.png'
 const SPRITE_JUMP = '/avatars/sprite-jump-clean.png'
@@ -106,10 +105,21 @@ export function PhotoModeUI() {
 
     try {
       const spriteSource = getCharacterSpriteSource(walking, jumping)
-      const [panorama, sprite] = await Promise.all([
-        loadImage(PANORAMIC_BG),
-        loadImage(spriteSource),
-      ])
+      const zoneBg = ZONE_BACKGROUNDS[currentZone]
+      let panorama: HTMLImageElement
+      let sprite: HTMLImageElement
+      try {
+        ;[panorama, sprite] = await Promise.all([
+          loadImage(zoneBg),
+          loadImage(spriteSource),
+        ])
+      } catch {
+        // Fall back to panoramic if zone bg fails
+        ;[panorama, sprite] = await Promise.all([
+          loadImage(FALLBACK_PANORAMIC),
+          loadImage(spriteSource),
+        ])
+      }
 
       const panoramicHeight = height
       const panoramicWidth = (panorama.width / panorama.height) * panoramicHeight
@@ -224,12 +234,13 @@ export function PhotoModeUI() {
           onClick={enterPhotoMode}
           style={{
             position: 'fixed',
-            bottom: '80px',
+            bottom: 'max(80px, calc(env(safe-area-inset-bottom, 0px) + 60px))',
             left: '50%',
             transform: 'translateX(-50%)',
             zIndex: 30,
             background: 'rgba(255,255,255,0.14)',
-            backdropFilter: 'blur(12px)',
+            backdropFilter: 'blur(4px)',
+            WebkitBackdropFilter: 'blur(4px)',
             border: '1px solid rgba(180, 220, 255, 0.5)',
             borderRadius: '50px',
             padding: '12px 24px',
@@ -255,7 +266,7 @@ export function PhotoModeUI() {
         <canvas ref={canvasRef} style={{ display: 'none' }} />
         <div style={{
           position: 'fixed',
-          bottom: '40px',
+          bottom: 'max(40px, calc(env(safe-area-inset-bottom, 0px) + 20px))',
           left: 0,
           right: 0,
           display: 'flex',
