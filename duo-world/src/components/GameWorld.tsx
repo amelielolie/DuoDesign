@@ -57,8 +57,8 @@ function preloadEndingVideo() {
   document.head.appendChild(link)
 }
 
-const HORIZONTAL_ACCEL_SMOOTHING = 0.2
-const HORIZONTAL_DECAY = 0.82
+const HORIZONTAL_ACCEL_SMOOTHING = 0.35  // faster ramp-up (was 0.2)
+const HORIZONTAL_DECAY = 0.91            // gentler coast-to-stop (was 0.82)
 const FIRST_JUMP_VELOCITY = 18
 const DOUBLE_JUMP_VELOCITY = 15
 const GRAVITY = 1.55
@@ -67,6 +67,8 @@ const CAMERA_LERP = 0.12
 const PHOTO_SPOT_THRESHOLD = 0.02
 const STREAK_TIMEOUT_MS = 1600
 const TARGET_FPS = 60
+const SWIPE_THRESHOLD = 30              // px — smaller for iPhones (was 50)
+const SWIPE_MAX_DURATION_MS = 400       // ignore slow drags
 
 export function GameWorld() {
   const phase = useGameStore((s) => s.phase)
@@ -112,6 +114,8 @@ export function GameWorld() {
   const streakRef = useRef(0)
   const lastCollectAtRef = useRef(0)
   const touchStartY = useRef(0)
+  const touchStartTime = useRef(0)
+  const swipeConsumed = useRef(false)
   const kickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const lastFrameTimeRef = useRef(0)
   const lastZoneRef = useRef<ZoneId>('neon-alley')
@@ -317,7 +321,9 @@ export function GameWorld() {
 
     if (directionRef.current !== 0) {
       const targetVelocity = MOVEMENT.speed * directionRef.current
-      velocityRef.current += (targetVelocity - velocityRef.current) * HORIZONTAL_ACCEL_SMOOTHING * dtFactor
+      const isReversing = velocityRef.current !== 0 && Math.sign(velocityRef.current) !== directionRef.current
+      const accelRate = isReversing ? HORIZONTAL_ACCEL_SMOOTHING * 2.5 : HORIZONTAL_ACCEL_SMOOTHING
+      velocityRef.current += (targetVelocity - velocityRef.current) * accelRate * dtFactor
     } else {
       velocityRef.current *= Math.pow(HORIZONTAL_DECAY, dtFactor)
       if (Math.abs(velocityRef.current) < 0.00001) {
@@ -383,10 +389,11 @@ export function GameWorld() {
     const screenMid = windowSizeRef.current.w / 2
     const dir = e.clientX > screenMid ? 1 : -1
     directionRef.current = dir as 1 | -1
-    velocityRef.current *= 0.7
     setDirection(dir as 1 | -1)
     setWalking(true)
     touchStartY.current = e.clientY
+    touchStartTime.current = Date.now()
+    swipeConsumed.current = false
   }, [phase, setWalking, setDirection])
 
   const handlePointerMove = useCallback((e: React.PointerEvent) => {
@@ -397,17 +404,37 @@ export function GameWorld() {
       directionRef.current = dir as 1 | -1
       setDirection(dir as 1 | -1)
     }
-  }, [phase, setDirection])
+
+    // Detect swipe mid-touch for instant response
+    if (!swipeConsumed.current && touchStartY.current > 0) {
+      const elapsed = Date.now() - touchStartTime.current
+      if (elapsed < SWIPE_MAX_DURATION_MS) {
+        const deltaY = touchStartY.current - e.clientY
+        if (deltaY > SWIPE_THRESHOLD) {
+          swipeConsumed.current = true
+          triggerJump()
+        } else if (deltaY < -SWIPE_THRESHOLD) {
+          swipeConsumed.current = true
+          triggerKick()
+        }
+      }
+    }
+  }, [phase, setDirection, triggerJump, triggerKick])
 
   const handlePointerUp = useCallback((e: React.PointerEvent | PointerEvent) => {
     isTouchingRef.current = false
-    if (touchStartY.current > 0 && 'clientY' in e) {
-      const deltaY = touchStartY.current - e.clientY
-      if (deltaY > 50) triggerJump()
-      else if (deltaY < -50) triggerKick()
+    // Fallback swipe detection on release (if not already consumed mid-touch)
+    if (!swipeConsumed.current && touchStartY.current > 0 && 'clientY' in e) {
+      const elapsed = Date.now() - touchStartTime.current
+      if (elapsed < SWIPE_MAX_DURATION_MS) {
+        const deltaY = touchStartY.current - e.clientY
+        if (deltaY > SWIPE_THRESHOLD) triggerJump()
+        else if (deltaY < -SWIPE_THRESHOLD) triggerKick()
+      }
     }
     directionRef.current = 0
     touchStartY.current = 0
+    swipeConsumed.current = false
   }, [triggerJump, triggerKick])
 
   useEffect(() => {
@@ -419,6 +446,20 @@ export function GameWorld() {
       window.removeEventListener('pointercancel', handler)
     }
   }, [handlePointerUp])
+
+  // Prevent iOS Safari rubber-band scroll and pinch-zoom during gameplay
+  useEffect(() => {
+    if (phase !== 'exploring') return
+    const prevent = (e: Event) => e.preventDefault()
+    document.addEventListener('touchmove', prevent, { passive: false } as EventListenerOptions)
+    document.addEventListener('gesturestart', prevent, { passive: false } as EventListenerOptions)
+    document.addEventListener('gesturechange', prevent, { passive: false } as EventListenerOptions)
+    return () => {
+      document.removeEventListener('touchmove', prevent)
+      document.removeEventListener('gesturestart', prevent)
+      document.removeEventListener('gesturechange', prevent)
+    }
+  }, [phase])
 
   // Keyboard controls
   useEffect(() => {
