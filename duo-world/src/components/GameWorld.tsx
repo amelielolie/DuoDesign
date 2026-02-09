@@ -29,10 +29,10 @@ function seededRandom(i: number, seed: number): number {
   return x - Math.floor(x)
 }
 
-// Regular bills across first 3 zones (0.04 to 0.57)
+// Regular bills across first 3 zones (0.08 to 0.57)
 const BILL_COUNT = 20
 const BILL_POSITIONS = Array.from({ length: BILL_COUNT }, (_, i) => ({
-  x: 0.04 + (i / BILL_COUNT) * 0.53,
+  x: 0.08 + (i / BILL_COUNT) * 0.49,
   y: 20 + seededRandom(i, 100) * 35,
 }))
 
@@ -722,9 +722,8 @@ export function GameWorld() {
       {/* Frozen dollar bills */}
       {worldX >= 0.58 && FROZEN_BILLS.map((bill, i) => {
         if (collectedFrozenBills.has(i)) return null
-        const dist = displayWorldX - bill.trigger
-        if (dist < -0.05 || dist > 0.05) return null
-        const screenX = 75 - (dist + 0.05) * (50 / 0.10)
+        const screenX = (bill.trigger - displayWorldX) * parallaxFactor
+        if (screenX < -10 || screenX > 110) return null
         return (
           <div
             key={`frozen-${i}`}
