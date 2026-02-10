@@ -263,7 +263,18 @@ export function EndingSequence() {
     setVideoErrorLabel(label)
     setShowPlayButton(true)
     setAutoRetryCount((previous) => {
-      if (previous >= MAX_AUTO_RETRIES) return previous
+      if (previous >= MAX_AUTO_RETRIES) {
+        // On iOS, auto-skip to reward screen when all retries exhausted
+        if (isIOS) {
+          clearRetryTimer()
+          retryTimerRef.current = window.setTimeout(() => {
+            retryTimerRef.current = null
+            setStage('reward')
+            setPhase('reward')
+          }, 800)
+        }
+        return previous
+      }
       clearRetryTimer()
       retryTimerRef.current = window.setTimeout(() => {
         retryTimerRef.current = null
@@ -271,7 +282,7 @@ export function EndingSequence() {
       }, 220)
       return previous + 1
     })
-  }, [clearRetryTimer, retryVideo])
+  }, [clearRetryTimer, retryVideo, isIOS, setPhase])
 
   const handlePlay = useCallback(() => {
     const video = videoRef.current
@@ -559,7 +570,7 @@ export function EndingSequence() {
               </button>
             )}
 
-            {rangeProbeStatus === 'failed' && !videoStarted && (
+            {rangeProbeStatus === 'failed' && !videoStarted && !isIOS && (
               <div style={{
                 position: 'absolute',
                 left: '50%',
@@ -574,7 +585,7 @@ export function EndingSequence() {
               </div>
             )}
 
-            {videoError && (
+            {videoError && !isIOS && (
               <div style={{
                 position: 'absolute',
                 left: '50%',
@@ -830,10 +841,16 @@ export function EndingSequence() {
                 target="_blank"
                 rel="noopener noreferrer"
                 style={{
-                  color: 'rgba(255,255,255,0.4)',
-                  fontSize: '0.65rem',
-                  letterSpacing: '0.12em',
+                  color: 'rgba(255,255,255,0.85)',
+                  fontSize: '1.1rem',
+                  fontWeight: 600,
+                  letterSpacing: '0.15em',
                   textDecoration: 'none',
+                  marginTop: '12px',
+                  padding: '8px 20px',
+                  background: 'linear-gradient(135deg, rgba(193,53,132,0.4), rgba(131,58,180,0.4))',
+                  borderRadius: '24px',
+                  border: '1px solid rgba(255,255,255,0.2)',
                 }}
               >
                 @amelielolie

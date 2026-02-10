@@ -29,17 +29,18 @@ function seededRandom(i: number, seed: number): number {
   return x - Math.floor(x)
 }
 
-// Regular bills across first 3 zones (0.08 to 0.57)
-const BILL_COUNT = 20
+// Regular bills across first 3 zones (0.10 to 0.57)
+// Start at 0.10 so first bill is always ahead of the character at game start
+const BILL_COUNT = 14
 const BILL_POSITIONS = Array.from({ length: BILL_COUNT }, (_, i) => ({
-  x: 0.08 + (i / BILL_COUNT) * 0.49,
-  y: 20 + seededRandom(i, 100) * 35,
+  x: 0.10 + (i / (BILL_COUNT - 1)) * 0.47,
+  y: 20 + seededRandom(i, 100) * 30,
 }))
 
-// Frozen bills across blizzard zone (0.63 to 0.92)
-const FROZEN_BILLS = Array.from({ length: 10 }, (_, i) => ({
-  trigger: 0.63 + (i / 10) * 0.29,
-  y: 20 + seededRandom(i, 200) * 35,
+// Frozen bills across blizzard zone (0.65 to 0.92)
+const FROZEN_BILLS = Array.from({ length: 6 }, (_, i) => ({
+  trigger: 0.65 + (i / 5) * 0.27,
+  y: 20 + seededRandom(i, 200) * 25,
 }))
 
 let videoPreloaded = false
@@ -53,18 +54,18 @@ function preloadEndingVideo() {
   document.head.appendChild(link)
 }
 
-const HORIZONTAL_ACCEL_SMOOTHING = 0.35  // faster ramp-up (was 0.2)
-const HORIZONTAL_DECAY = 0.91            // gentler coast-to-stop (was 0.82)
+const HORIZONTAL_ACCEL_SMOOTHING = 0.42  // snappy ramp-up
+const HORIZONTAL_DECAY = 0.91            // gentler coast-to-stop
 const FIRST_JUMP_VELOCITY = 18
 const DOUBLE_JUMP_VELOCITY = 15
 const GRAVITY = 1.55
 const VERTICAL_DAMPING = 0.985
-const CAMERA_LERP = 0.12
+const CAMERA_LERP = 0.20               // faster camera follow for smoother feel
 const PHOTO_SPOT_THRESHOLD = 0.02
 const STREAK_TIMEOUT_MS = 1600
 const TARGET_FPS = 60
-const SWIPE_THRESHOLD = 30              // px — smaller for iPhones (was 50)
-const SWIPE_MAX_DURATION_MS = 400       // ignore slow drags
+const SWIPE_THRESHOLD = 18              // px — low threshold for responsive swipes
+const SWIPE_MAX_DURATION_MS = 600       // generous window for swipe detection
 
 export function GameWorld() {
   const phase = useGameStore((s) => s.phase)
@@ -255,10 +256,10 @@ export function GameWorld() {
     BILL_POSITIONS.forEach((bill, i) => {
       if (collectedBills.has(i)) return
       const billScreenX = (bill.x - worldX) * factor
-      if (Math.abs(billScreenX - 45) < 15) {
+      if (Math.abs(billScreenX - 45) < 18) {
         const charBottom = 12 + (jumpY / winH) * 100
         const charTop = charBottom + 28
-        if (bill.y >= charBottom - 5 && bill.y <= charTop + 5) {
+        if (bill.y >= charBottom - 8 && bill.y <= charTop + 8) {
           collectBill(i)
           registerCollect(false)
           const id = effectIdRef.current++
@@ -271,29 +272,31 @@ export function GameWorld() {
     })
   }, [worldX, jumpY, collectedBills, collectBill, registerCollect, maxScroll])
 
-  // Frozen bill collision
+  // Frozen bill collision (screen-position based, same as regular bills)
   useEffect(() => {
-    if (worldX < 0.58) return
+    if (maxScroll === 0 || worldX < 0.55) return
+    const winW = windowSizeRef.current.w
     const winH = windowSizeRef.current.h
+    const factor = maxScroll / winW * 100 + 100
     FROZEN_BILLS.forEach((bill, i) => {
       if (collectedFrozenBills.has(i)) return
-      const dist = worldX - bill.trigger
-      if (dist >= -0.03 && dist < 0.03) {
+      const billScreenX = (bill.trigger - worldX) * factor
+      if (Math.abs(billScreenX - 45) < 20) {
         const charBottom = 12 + (jumpY / winH) * 100
         const charTop = charBottom + 28
-        if (bill.y >= charBottom - 10 && bill.y <= charTop + 10) {
+        if (bill.y >= charBottom - 15 && bill.y <= charTop + 15) {
           setCollectedFrozenBills(prev => new Set([...prev, i]))
           collectBill(100 + i)
           registerCollect(true)
           const id = effectIdRef.current++
-          setIceBreakEffects(prev => [...prev, { id, x: 45, y: bill.y }])
+          setIceBreakEffects(prev => [...prev, { id, x: billScreenX, y: bill.y }])
           setTimeout(() => {
             setIceBreakEffects(prev => prev.filter(e => e.id !== id))
           }, 1000)
         }
       }
     })
-  }, [worldX, jumpY, collectedFrozenBills, collectBill, registerCollect])
+  }, [worldX, jumpY, collectedFrozenBills, collectBill, registerCollect, maxScroll])
 
   const triggerJump = useCallback(() => {
     if (jumpCountRef.current >= maxJumps) return
@@ -465,19 +468,52 @@ export function GameWorld() {
     }
   }, [handlePointerUp])
 
-  // Prevent iOS Safari rubber-band scroll and pinch-zoom during gameplay
+  // Native touch-based swipe detection (more reliable than pointer events on iOS)
+  const touchSwipeY = useRef(0)
+  const touchSwipeTime = useRef(0)
+  const touchSwipeDone = useRef(false)
+
   useEffect(() => {
     if (phase !== 'exploring') return
-    const prevent = (e: Event) => e.preventDefault()
-    document.addEventListener('touchmove', prevent, { passive: false } as EventListenerOptions)
-    document.addEventListener('gesturestart', prevent, { passive: false } as EventListenerOptions)
-    document.addEventListener('gesturechange', prevent, { passive: false } as EventListenerOptions)
-    return () => {
-      document.removeEventListener('touchmove', prevent)
-      document.removeEventListener('gesturestart', prevent)
-      document.removeEventListener('gesturechange', prevent)
+
+    const onTouchStart = (e: TouchEvent) => {
+      touchSwipeY.current = e.touches[0].clientY
+      touchSwipeTime.current = Date.now()
+      touchSwipeDone.current = false
     }
-  }, [phase])
+    const onTouchMove = (e: TouchEvent) => {
+      e.preventDefault()
+      if (touchSwipeDone.current) return
+      const elapsed = Date.now() - touchSwipeTime.current
+      if (elapsed > SWIPE_MAX_DURATION_MS) return
+      const deltaY = touchSwipeY.current - e.touches[0].clientY
+      if (deltaY > SWIPE_THRESHOLD) {
+        touchSwipeDone.current = true
+        swipeConsumed.current = true
+        triggerJump()
+      } else if (deltaY < -SWIPE_THRESHOLD) {
+        touchSwipeDone.current = true
+        swipeConsumed.current = true
+        triggerKick()
+      }
+    }
+    const onTouchEnd = () => {
+      touchSwipeDone.current = false
+    }
+
+    document.addEventListener('touchstart', onTouchStart, { passive: true } as EventListenerOptions)
+    document.addEventListener('touchmove', onTouchMove, { passive: false } as EventListenerOptions)
+    document.addEventListener('touchend', onTouchEnd, { passive: true } as EventListenerOptions)
+    document.addEventListener('gesturestart', (e: Event) => e.preventDefault(), { passive: false } as EventListenerOptions)
+    document.addEventListener('gesturechange', (e: Event) => e.preventDefault(), { passive: false } as EventListenerOptions)
+    return () => {
+      document.removeEventListener('touchstart', onTouchStart)
+      document.removeEventListener('touchmove', onTouchMove)
+      document.removeEventListener('touchend', onTouchEnd)
+      document.removeEventListener('gesturestart', onTouchStart as EventListener)
+      document.removeEventListener('gesturechange', onTouchStart as EventListener)
+    }
+  }, [phase, triggerJump, triggerKick])
 
   // Keyboard controls
   useEffect(() => {
@@ -686,7 +722,7 @@ export function GameWorld() {
       })}
 
       {/* Dollar bills */}
-      {BILL_POSITIONS.map((bill, i) => {
+      {maxScroll > 0 && BILL_POSITIONS.map((bill, i) => {
         if (collectedBills.has(i)) return null
         const screenX = (bill.x - displayWorldX) * parallaxFactor
         if (screenX < -10 || screenX > 110) return null
@@ -720,7 +756,7 @@ export function GameWorld() {
       })}
 
       {/* Frozen dollar bills */}
-      {worldX >= 0.58 && FROZEN_BILLS.map((bill, i) => {
+      {maxScroll > 0 && FROZEN_BILLS.map((bill, i) => {
         if (collectedFrozenBills.has(i)) return null
         const screenX = (bill.trigger - displayWorldX) * parallaxFactor
         if (screenX < -10 || screenX > 110) return null
