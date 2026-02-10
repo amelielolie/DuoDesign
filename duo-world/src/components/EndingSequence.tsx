@@ -841,16 +841,12 @@ export function EndingSequence() {
                 target="_blank"
                 rel="noopener noreferrer"
                 style={{
-                  color: 'rgba(255,255,255,0.85)',
-                  fontSize: '1.1rem',
-                  fontWeight: 600,
-                  letterSpacing: '0.15em',
+                  color: 'rgba(255,255,255,0.7)',
+                  fontSize: '1rem',
+                  fontWeight: 400,
+                  letterSpacing: '0.18em',
                   textDecoration: 'none',
-                  marginTop: '12px',
-                  padding: '8px 20px',
-                  background: 'linear-gradient(135deg, rgba(193,53,132,0.4), rgba(131,58,180,0.4))',
-                  borderRadius: '24px',
-                  border: '1px solid rgba(255,255,255,0.2)',
+                  marginTop: '16px',
                 }}
               >
                 @amelielolie

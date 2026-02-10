@@ -559,7 +559,7 @@ export function GameWorld() {
         }
       }
       // Fallback measure
-      setMaxScroll(windowSizeRef.current.w * 3)
+      setMaxScroll(windowSizeRef.current.w * 7)
     }
     measure()
     window.addEventListener('resize', measure)
@@ -623,7 +623,7 @@ export function GameWorld() {
                 pointerEvents: 'none',
                 WebkitTouchCallout: 'none',
                 userSelect: 'none',
-                minWidth: `${windowSizeRef.current.w * 4}px`,
+                minWidth: `${windowSizeRef.current.w * 8}px`,
               }}
               onError={() => setZoneBgErrors(prev => new Set([...prev, idx]))}
               onLoad={() => {

@@ -45,7 +45,7 @@ export const CHARACTER = {
 
 // Movement
 export const MOVEMENT = {
-  speed: 0.002, // fraction of world per frame at 60fps
+  speed: 0.0014, // fraction of world per frame at 60fps
 }
 
 // Zone atmospheres — gradient backgrounds
