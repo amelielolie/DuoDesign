@@ -569,8 +569,9 @@ export function GameWorld() {
           return
         }
       }
-      // Fallback measure
-      setMaxScroll(windowSizeRef.current.w * 7)
+      // Fallback measure — use longest dimension for consistent feel
+      const longest = Math.max(windowSizeRef.current.w, windowSizeRef.current.h)
+      setMaxScroll(longest * 6 - windowSizeRef.current.w)
     }
     measure()
     window.addEventListener('resize', measure)
@@ -608,6 +609,7 @@ export function GameWorld() {
       {ZONE_ORDER.map((zone, idx) => {
         const opacity = getZoneBgOpacity(displayWorldX, idx)
         if (opacity <= 0 && !zoneBgErrors.has(idx)) return null
+        const stripWidth = Math.max(windowSizeRef.current.w, windowSizeRef.current.h) * 6
         return (
           <div
             key={zone}
@@ -616,6 +618,7 @@ export function GameWorld() {
               position: 'absolute',
               top: 0,
               left: 0,
+              width: `${stripWidth}px`,
               height: '100%',
               transform: `translateX(-${scrollX}px)`,
               willChange: 'transform',
@@ -628,13 +631,13 @@ export function GameWorld() {
               alt=""
               draggable={false}
               style={{
+                width: '100%',
                 height: '100%',
-                width: 'auto',
                 display: 'block',
+                objectFit: 'cover',
                 pointerEvents: 'none',
                 WebkitTouchCallout: 'none',
                 userSelect: 'none',
-                minWidth: `${windowSizeRef.current.w * 8}px`,
               }}
               onError={() => setZoneBgErrors(prev => new Set([...prev, idx]))}
               onLoad={() => {
@@ -649,37 +652,43 @@ export function GameWorld() {
       })}
 
       {/* Fallback panoramic (always visible behind zone backgrounds) */}
-      <div
-        style={{
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          height: '100%',
-          transform: `translateX(-${scrollX}px)`,
-          willChange: 'transform',
-          zIndex: 0,
-        }}
-      >
-        <img
-          src={FALLBACK_PANORAMIC}
-          alt=""
-          draggable={false}
-          style={{
-            height: '100%',
-            width: 'auto',
-            display: 'block',
-            pointerEvents: 'none',
-            minWidth: `${windowSizeRef.current.w * 4}px`,
-          }}
-          onLoad={(e) => {
-            const img = e.currentTarget
-            const parent = img.parentElement
-            if (parent) {
-              setMaxScroll(prev => Math.max(prev, parent.scrollWidth - windowSizeRef.current.w))
-            }
-          }}
-        />
-      </div>
+      {(() => {
+        const fallbackWidth = Math.max(windowSizeRef.current.w, windowSizeRef.current.h) * 6
+        return (
+          <div
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              width: `${fallbackWidth}px`,
+              height: '100%',
+              transform: `translateX(-${scrollX}px)`,
+              willChange: 'transform',
+              zIndex: 0,
+            }}
+          >
+            <img
+              src={FALLBACK_PANORAMIC}
+              alt=""
+              draggable={false}
+              style={{
+                width: '100%',
+                height: '100%',
+                display: 'block',
+                objectFit: 'cover',
+                pointerEvents: 'none',
+              }}
+              onLoad={(e) => {
+                const img = e.currentTarget
+                const parent = img.parentElement
+                if (parent) {
+                  setMaxScroll(prev => Math.max(prev, parent.scrollWidth - windowSizeRef.current.w))
+                }
+              }}
+            />
+          </div>
+        )
+      })()}
 
       {/* Vignette overlay */}
       <div style={{
