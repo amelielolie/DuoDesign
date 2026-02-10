@@ -21,7 +21,11 @@ function getZoneOpacity(progress: number, zoneStart: number, zoneEnd: number): n
   return Math.max(0, Math.min(1, ((zoneEnd + blend) - progress) / (blend * 2)))
 }
 
+const prefersReducedMotion = typeof window !== 'undefined'
+  && window.matchMedia('(prefers-reduced-motion: reduce)').matches
+
 export function Particles({ progress }: { progress: number }) {
+  if (prefersReducedMotion) return null
   const neonOpacity = getZoneOpacity(progress, 0, 0.20)
   const plazaOpacity = getZoneOpacity(progress, 0.20, 0.40)
   const rainOpacity = getZoneOpacity(progress, 0.40, 0.60)
@@ -92,7 +96,7 @@ export function Particles({ progress }: { progress: number }) {
       overflow: 'hidden',
     }}>
       {/* Neon sparks - diamond/star shaped */}
-      {neonOpacity > 0 && (
+      {neonOpacity > 0.05 && (
         <div style={{ opacity: neonOpacity, transition: 'opacity 0.5s ease' }}>
           {neonSparks.map((spark, i) => (
             <div
@@ -113,7 +117,7 @@ export function Particles({ progress }: { progress: number }) {
       )}
 
       {/* Embers - teardrop/elongated */}
-      {plazaOpacity > 0 && (
+      {plazaOpacity > 0.05 && (
         <div style={{ opacity: plazaOpacity, transition: 'opacity 0.5s ease' }}>
           {embers.map((ember, i) => (
             <div
@@ -134,7 +138,7 @@ export function Particles({ progress }: { progress: number }) {
       )}
 
       {/* Rain - elongated streaks */}
-      {rainOpacity > 0 && (
+      {rainOpacity > 0.05 && (
         <div style={{ opacity: rainOpacity, transition: 'opacity 0.5s ease' }}>
           {rainDrops.map((drop, i) => (
             <div
@@ -155,7 +159,7 @@ export function Particles({ progress }: { progress: number }) {
       )}
 
       {/* Snow + blizzard */}
-      {natureOpacity > 0 && (
+      {natureOpacity > 0.05 && (
         <div style={{ opacity: natureOpacity, transition: 'opacity 0.5s ease' }}>
           {snowflakes.map((flake, i) => (
             <div
@@ -184,7 +188,7 @@ export function Particles({ progress }: { progress: number }) {
       )}
 
       {/* Dust motes (ambient, visible in neon + plaza zones) */}
-      {(neonOpacity > 0 || plazaOpacity > 0) && (
+      {(neonOpacity > 0.05 || plazaOpacity > 0.05) && (
         <div style={{ opacity: Math.max(neonOpacity, plazaOpacity) * 0.7, transition: 'opacity 0.5s ease' }}>
           {dustMotes.map((mote, i) => (
             <div

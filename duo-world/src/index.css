@@ -7,6 +7,7 @@
 
 html, body, #root {
   width: 100%;
+  height: 100vh;
   height: 100dvh;
   overflow: hidden;
   background: #080e14;
@@ -44,16 +45,16 @@ html, body, #root {
   0% {
     opacity: 0;
     transform: scale(1.1);
-    filter: blur(10px) brightness(0.5);
+    filter: blur(4px) brightness(0.5);
   }
   60% {
     opacity: 1;
-    filter: blur(0px) brightness(1);
+    filter: none;
   }
   100% {
     opacity: 1;
     transform: scale(1);
-    filter: blur(0px) brightness(1);
+    filter: none;
   }
 }
 
@@ -246,12 +247,12 @@ html, body, #root {
   0% {
     opacity: 0;
     transform: translate(-50%, -50%) scale(0.8);
-    filter: blur(8px);
+    filter: blur(3px);
   }
   30% {
     opacity: 1;
     transform: translate(-50%, -50%) scale(1.02);
-    filter: blur(0px);
+    filter: none;
   }
   70% {
     opacity: 1;
@@ -260,7 +261,7 @@ html, body, #root {
   100% {
     opacity: 0;
     transform: translate(-50%, -50%) scale(1.05);
-    filter: blur(4px);
+    filter: blur(2px);
   }
 }
 
@@ -307,16 +308,16 @@ html, body, #root {
   0% {
     opacity: 0;
     transform: scale(0.95);
-    filter: blur(6px);
+    filter: blur(3px);
   }
   50% {
     opacity: 1;
-    filter: blur(0px);
+    filter: none;
   }
   100% {
     opacity: 1;
     transform: scale(1);
-    filter: blur(0px);
+    filter: none;
   }
 }
 
@@ -326,17 +327,17 @@ html, body, #root {
   0% {
     opacity: 0;
     transform: translate(-50%, -50%) scale(0.85);
-    filter: blur(8px);
+    filter: blur(3px);
   }
   60% {
     opacity: 1;
     transform: translate(-50%, -50%) scale(1.02);
-    filter: blur(0px);
+    filter: none;
   }
   100% {
     opacity: 1;
     transform: translate(-50%, -50%) scale(1);
-    filter: blur(0px);
+    filter: none;
   }
 }
 

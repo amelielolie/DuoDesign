@@ -379,8 +379,13 @@ export function GameWorld() {
     }
 
     const targetDisplayX = worldXRef.current
-    const nextDisplayX = displayWorldXRef.current + (targetDisplayX - displayWorldXRef.current) * CAMERA_LERP * dtFactor
-    if (Math.abs(nextDisplayX - displayWorldXRef.current) > 0.00001) {
+    if (Math.abs(targetDisplayX - displayWorldXRef.current) < 0.00005) {
+      if (displayWorldXRef.current !== targetDisplayX) {
+        displayWorldXRef.current = targetDisplayX
+        setDisplayWorldX(targetDisplayX)
+      }
+    } else {
+      const nextDisplayX = displayWorldXRef.current + (targetDisplayX - displayWorldXRef.current) * CAMERA_LERP * dtFactor
       displayWorldXRef.current = nextDisplayX
       setDisplayWorldX(nextDisplayX)
     }
@@ -469,9 +474,14 @@ export function GameWorld() {
   }, [handlePointerUp])
 
   // Native touch-based swipe detection (more reliable than pointer events on iOS)
+  // Use refs for callbacks to avoid re-registering listeners every frame
   const touchSwipeY = useRef(0)
   const touchSwipeTime = useRef(0)
   const touchSwipeDone = useRef(false)
+  const triggerJumpRef = useRef(triggerJump)
+  const triggerKickRef = useRef(triggerKick)
+  triggerJumpRef.current = triggerJump
+  triggerKickRef.current = triggerKick
 
   useEffect(() => {
     if (phase !== 'exploring') return
@@ -490,30 +500,31 @@ export function GameWorld() {
       if (deltaY > SWIPE_THRESHOLD) {
         touchSwipeDone.current = true
         swipeConsumed.current = true
-        triggerJump()
+        triggerJumpRef.current()
       } else if (deltaY < -SWIPE_THRESHOLD) {
         touchSwipeDone.current = true
         swipeConsumed.current = true
-        triggerKick()
+        triggerKickRef.current()
       }
     }
     const onTouchEnd = () => {
       touchSwipeDone.current = false
     }
+    const preventGesture = (e: Event) => e.preventDefault()
 
     document.addEventListener('touchstart', onTouchStart, { passive: true } as EventListenerOptions)
     document.addEventListener('touchmove', onTouchMove, { passive: false } as EventListenerOptions)
     document.addEventListener('touchend', onTouchEnd, { passive: true } as EventListenerOptions)
-    document.addEventListener('gesturestart', (e: Event) => e.preventDefault(), { passive: false } as EventListenerOptions)
-    document.addEventListener('gesturechange', (e: Event) => e.preventDefault(), { passive: false } as EventListenerOptions)
+    document.addEventListener('gesturestart', preventGesture, { passive: false } as EventListenerOptions)
+    document.addEventListener('gesturechange', preventGesture, { passive: false } as EventListenerOptions)
     return () => {
       document.removeEventListener('touchstart', onTouchStart)
       document.removeEventListener('touchmove', onTouchMove)
       document.removeEventListener('touchend', onTouchEnd)
-      document.removeEventListener('gesturestart', onTouchStart as EventListener)
-      document.removeEventListener('gesturechange', onTouchStart as EventListener)
+      document.removeEventListener('gesturestart', preventGesture)
+      document.removeEventListener('gesturechange', preventGesture)
     }
-  }, [phase, triggerJump, triggerKick])
+  }, [phase])
 
   // Keyboard controls
   useEffect(() => {
@@ -1100,7 +1111,8 @@ export function GameWorld() {
               : (walking || jumping) ? 'spriteWalk 0.8s steps(1) infinite' : undefined,
         transform: entered ? (direction === -1 ? 'scaleX(-1)' : undefined) : undefined,
         ...(!entered ? { '--char-dir': direction === -1 ? -1 : 1 } as React.CSSProperties : {}),
-        filter: 'drop-shadow(0 2px 12px rgba(0,0,0,0.7))',
+        filter: 'drop-shadow(0 2px 6px rgba(0,0,0,0.6))',
+        willChange: 'transform',
         zIndex: 10,
       }} />
 

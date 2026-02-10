@@ -159,7 +159,7 @@ export function EndingSequence() {
 
   useEffect(() => {
     if (phase !== 'ending' || !videoUrl) return
-    if (videoUrl.startsWith('blob:')) {
+    if (videoUrl.startsWith('blob:') || isIOS) {
       setRangeProbeStatus('ok')
       return
     }
@@ -699,7 +699,7 @@ export function EndingSequence() {
                 width: '100%',
                 height: '100%',
                 objectFit: 'cover',
-                filter: 'blur(8px) brightness(0.35) saturate(0.6)',
+                filter: 'blur(4px) brightness(0.35) saturate(0.6)',
                 transform: 'scale(1.05)',
                 pointerEvents: 'none',
                 opacity: 0,

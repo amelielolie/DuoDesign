@@ -15,10 +15,14 @@ function usePlayerCount() {
   useEffect(() => {
     // Track locally regardless of API
     const localKey = 'duo-world-visit-count'
-    const localCount = parseInt(localStorage.getItem(localKey) || '0', 10) + 1
-    localStorage.setItem(localKey, String(localCount))
+    let localCount = 1
+    try {
+      localCount = parseInt(localStorage.getItem(localKey) || '0', 10) + 1
+      localStorage.setItem(localKey, String(localCount))
+    } catch { /* private browsing or storage full */ }
 
     const controller = new AbortController()
+    const apiTimeout = setTimeout(() => controller.abort(), 3000)
     fetch(COUNTER_API, {
       method: 'POST',
       signal: controller.signal,
@@ -31,7 +35,10 @@ function usePlayerCount() {
         // No API available — use local count as fallback
         if (localCount > 1) setCount(localCount)
       })
-    return () => controller.abort()
+    return () => {
+      clearTimeout(apiTimeout)
+      controller.abort()
+    }
   }, [])
 
   return count
@@ -137,7 +144,7 @@ export function SplashScreen() {
           height: '100%',
           objectFit: 'cover',
           animation: 'splashBgZoom 3s cubic-bezier(0.16, 1, 0.3, 1) forwards',
-          filter: 'blur(8px) brightness(0.4) saturate(0.7)',
+          filter: 'blur(4px) brightness(0.4) saturate(0.7)',
           pointerEvents: 'none',
         }}
       />
