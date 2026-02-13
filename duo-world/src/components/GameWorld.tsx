@@ -710,37 +710,6 @@ export function GameWorld() {
         zIndex: 4,
       }} />
 
-      {/* Photo spot markers */}
-      {PHOTO_SPOTS.map((spot, i) => {
-        const screenX = (spot.x - displayWorldX) * parallaxFactor
-        if (screenX < -10 || screenX > 110) return null
-        const nearby = Math.abs(worldX - spot.x) <= PHOTO_SPOT_THRESHOLD
-        return (
-          <div
-            key={`spot-${i}`}
-            style={{
-              position: 'absolute',
-              left: `${screenX}%`,
-              bottom: '10%',
-              transform: 'translateX(-50%)',
-              width: nearby ? '42px' : '30px',
-              height: nearby ? '42px' : '30px',
-              borderRadius: '50%',
-              border: nearby ? '2px solid rgba(255,255,255,0.9)' : '1px solid rgba(255,255,255,0.5)',
-              background: nearby
-                ? 'radial-gradient(circle, rgba(255,255,255,0.35), rgba(120,190,255,0.06))'
-                : 'radial-gradient(circle, rgba(255,255,255,0.15), transparent)',
-              boxShadow: nearby
-                ? '0 0 30px rgba(170, 210, 255, 0.8), 0 0 60px rgba(170, 210, 255, 0.3)'
-                : '0 0 16px rgba(120, 190, 255, 0.35)',
-              animation: nearby ? 'photoSpotPulse 1s ease-in-out infinite' : 'photoSpotPulse 2.2s ease-in-out infinite',
-              pointerEvents: 'none',
-              zIndex: 9,
-            }}
-          />
-        )
-      })}
-
       {/* Dollar bills */}
       {maxScroll > 0 && BILL_POSITIONS.map((bill, i) => {
         if (collectedBills.has(i)) return null

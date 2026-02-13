@@ -234,13 +234,6 @@ html, body, #root {
   }
 }
 
-/* === Photo Spots === */
-
-@keyframes photoSpotPulse {
-  0%, 100% { transform: translateX(-50%) scale(1); opacity: 0.8; }
-  50% { transform: translateX(-50%) scale(1.16); opacity: 1; }
-}
-
 /* === Zone Announcements === */
 
 @keyframes zoneAnnounceIn {
