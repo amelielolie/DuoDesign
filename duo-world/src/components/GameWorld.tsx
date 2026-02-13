@@ -258,8 +258,8 @@ export function GameWorld() {
       const billScreenX = (bill.x - worldX) * factor
       if (Math.abs(billScreenX - 45) < 18) {
         const charBottom = 12 + (jumpY / winH) * 100
-        const charTop = charBottom + 28
-        if (bill.y >= charBottom - 8 && bill.y <= charTop + 8) {
+        const charTop = charBottom + 18
+        if (bill.y >= charBottom - 2 && bill.y <= charTop + 2) {
           collectBill(i)
           registerCollect(false)
           const id = effectIdRef.current++
@@ -283,8 +283,8 @@ export function GameWorld() {
       const billScreenX = (bill.trigger - worldX) * factor
       if (Math.abs(billScreenX - 45) < 20) {
         const charBottom = 12 + (jumpY / winH) * 100
-        const charTop = charBottom + 28
-        if (bill.y >= charBottom - 15 && bill.y <= charTop + 15) {
+        const charTop = charBottom + 18
+        if (bill.y >= charBottom - 2 && bill.y <= charTop + 2) {
           setCollectedFrozenBills(prev => new Set([...prev, i]))
           collectBill(100 + i)
           registerCollect(true)
