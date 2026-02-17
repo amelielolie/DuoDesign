@@ -34,13 +34,13 @@ function seededRandom(i: number, seed: number): number {
 const BILL_COUNT = 14
 const BILL_POSITIONS = Array.from({ length: BILL_COUNT }, (_, i) => ({
   x: 0.10 + (i / (BILL_COUNT - 1)) * 0.47,
-  y: 20 + seededRandom(i, 100) * 30,
+  y: 16 + seededRandom(i, 100) * 22,
 }))
 
 // Frozen bills across blizzard zone (0.65 to 0.92)
 const FROZEN_BILLS = Array.from({ length: 6 }, (_, i) => ({
   trigger: 0.65 + (i / 5) * 0.27,
-  y: 20 + seededRandom(i, 200) * 25,
+  y: 16 + seededRandom(i, 200) * 22,
 }))
 
 let videoPreloaded = false
@@ -260,10 +260,10 @@ export function GameWorld() {
     BILL_POSITIONS.forEach((bill, i) => {
       if (collectedBills.has(i)) return
       const billScreenX = (bill.x - displayWorldX) * factor
-      if (Math.abs(billScreenX - charCenterX) < charWidthPct / 2 + 4) {
+      if (Math.abs(billScreenX - charCenterX) < charWidthPct / 2 + 8) {
         const charBottom = 12 + (jumpY / winH) * 100
         const charTop = charBottom + charHeightPct
-        if (bill.y >= charBottom - 4 && bill.y <= charTop + 4) {
+        if (bill.y >= charBottom - 12 && bill.y <= charTop + 12) {
           collectBill(i)
           registerCollect(false)
           const id = effectIdRef.current++
@@ -288,10 +288,10 @@ export function GameWorld() {
     FROZEN_BILLS.forEach((bill, i) => {
       if (collectedFrozenBills.has(i)) return
       const billScreenX = (bill.trigger - displayWorldX) * factor
-      if (Math.abs(billScreenX - charCenterX) < charWidthPct / 2 + 4) {
+      if (Math.abs(billScreenX - charCenterX) < charWidthPct / 2 + 8) {
         const charBottom = 12 + (jumpY / winH) * 100
         const charTop = charBottom + charHeightPct
-        if (bill.y >= charBottom - 4 && bill.y <= charTop + 4) {
+        if (bill.y >= charBottom - 12 && bill.y <= charTop + 12) {
           setCollectedFrozenBills(prev => new Set([...prev, i]))
           collectBill(100 + i)
           registerCollect(true)
