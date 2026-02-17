@@ -65,7 +65,7 @@ function preloadEndingVideo() {
 
 // Ground level: lower on landscape/desktop so character walks on the ground
 function getGroundPct(w: number, h: number): number {
-  return Math.max(3, 12 - Math.max(0, w / h - 0.7) * 8)
+  return Math.max(1, 12 - Math.max(0, w / h - 0.6) * 10)
 }
 
 const HORIZONTAL_ACCEL_SMOOTHING = 0.42  // snappy ramp-up
@@ -103,7 +103,7 @@ export function GameWorld() {
   const maxJumps = useGameStore((s) => s.maxJumps)
   const currentZone = useGameStore((s) => s.currentZone)
   const collectedBills = useGameStore((s) => s.collectedBills)
-  const collectBill = useGameStore((s) => s.collectBill)
+  // collectBill accessed via useGameStore.getState() in animation loop
   const kicking = useGameStore((s) => s.kicking)
   const setKicking = useGameStore((s) => s.setKicking)
   const cameraShake = useGameStore((s) => s.cameraShake)
@@ -144,11 +144,16 @@ export function GameWorld() {
   const [danceTextVisible, setDanceTextVisible] = useState(false)
   const effectIdRef = useRef(0)
   const stripRefs = useRef<(HTMLDivElement | null)[]>([null, null, null, null])
+  const maxScrollRef = useRef(0)
+  const collectedFrozenBillsRef = useRef<Set<number>>(new Set())
+  const registerCollectRef = useRef<(icy: boolean) => void>(() => {})
 
   worldXRef.current = worldX
   displayWorldXRef.current = displayWorldX
   jumpYRef.current = jumpY
   jumpCountRef.current = jumpCount
+  maxScrollRef.current = maxScroll
+  collectedFrozenBillsRef.current = collectedFrozenBills
 
   // Cache window dimensions
   useEffect(() => {
@@ -249,6 +254,7 @@ export function GameWorld() {
     triggerHaptic(icy ? [12, 26, 14] : 16)
     triggerCameraShake(icy ? 2 : 1)
   }, [triggerHaptic, triggerCameraShake])
+  registerCollectRef.current = registerCollect
 
   useEffect(() => {
     if (streak === 0) return
@@ -261,63 +267,7 @@ export function GameWorld() {
     return () => clearTimeout(timer)
   }, [streak, worldX])
 
-  // Bill collision detection
-  useEffect(() => {
-    if (maxScroll === 0) return
-    const winW = windowSizeRef.current.w
-    const winH = windowSizeRef.current.h
-    const factor = maxScroll / winW * 100 + 100
-    // Character dimensions matching the rendered sprite
-    const charWidthPct = Math.min(45, 280 / winW * 100)
-    const charCenterX = 38 + charWidthPct / 2
-    const charHeightPct = (Math.min(winW * 0.45, 280) * 1.3) / winH * 100
-    BILL_POSITIONS.forEach((bill, i) => {
-      if (collectedBills.has(i)) return
-      const billScreenX = (bill.x - displayWorldX) * factor
-      if (Math.abs(billScreenX - charCenterX) < charWidthPct / 2 + 8) {
-        const charBottom = getGroundPct(winW, winH) + (jumpY / winH) * 100
-        const charTop = charBottom + charHeightPct
-        if (bill.y >= charBottom - 10 && bill.y <= charTop + 10) {
-          collectBill(i)
-          registerCollect(false)
-          const id = effectIdRef.current++
-          setCollectEffects((prev) => [...prev, { id, x: billScreenX, y: bill.y }])
-          setTimeout(() => {
-            setCollectEffects((prev) => prev.filter((e) => e.id !== id))
-          }, 800)
-        }
-      }
-    })
-  }, [displayWorldX, jumpY, collectedBills, collectBill, registerCollect, maxScroll])
-
-  // Frozen bill collision (screen-position based, same as regular bills)
-  useEffect(() => {
-    if (maxScroll === 0 || displayWorldX < 0.55) return
-    const winW = windowSizeRef.current.w
-    const winH = windowSizeRef.current.h
-    const factor = maxScroll / winW * 100 + 100
-    const charWidthPct = Math.min(45, 280 / winW * 100)
-    const charCenterX = 38 + charWidthPct / 2
-    const charHeightPct = (Math.min(winW * 0.45, 280) * 1.3) / winH * 100
-    FROZEN_BILLS.forEach((bill, i) => {
-      if (collectedFrozenBills.has(i)) return
-      const billScreenX = (bill.trigger - displayWorldX) * factor
-      if (Math.abs(billScreenX - charCenterX) < charWidthPct / 2 + 8) {
-        const charBottom = getGroundPct(winW, winH) + (jumpY / winH) * 100
-        const charTop = charBottom + charHeightPct
-        if (bill.y >= charBottom - 10 && bill.y <= charTop + 10) {
-          setCollectedFrozenBills(prev => new Set([...prev, i]))
-          collectBill(100 + i)
-          registerCollect(true)
-          const id = effectIdRef.current++
-          setIceBreakEffects(prev => [...prev, { id, x: billScreenX, y: bill.y }])
-          setTimeout(() => {
-            setIceBreakEffects(prev => prev.filter(e => e.id !== id))
-          }, 1000)
-        }
-      }
-    })
-  }, [displayWorldX, jumpY, collectedFrozenBills, collectBill, registerCollect, maxScroll])
+  // Bill collision is now checked inside the animation loop for reliability
 
   const triggerJump = useCallback(() => {
     if (jumpCountRef.current >= maxJumps) return
@@ -417,6 +367,57 @@ export function GameWorld() {
     if (moving !== walkingRef.current) {
       walkingRef.current = moving
       setWalking(moving)
+    }
+
+    // === Bill collision (runs every frame, using refs for current values) ===
+    const ms = maxScrollRef.current
+    if (ms > 0) {
+      const winW = windowSizeRef.current.w
+      const winH = windowSizeRef.current.h
+      const factor = ms / winW * 100 + 100
+      const charWidthPct = Math.min(45, 280 / winW * 100)
+      const charCenterX = 38 + charWidthPct / 2
+      const charHeightPct = (Math.min(winW * 0.45, 280) * 1.3) / winH * 100
+      const ground = getGroundPct(winW, winH)
+      const charBottom = ground + (jumpYRef.current / winH) * 100
+      const charTop = charBottom + charHeightPct
+      const xHalf = charWidthPct / 2 + 8
+      const dWX = displayWorldXRef.current
+
+      const store = useGameStore.getState()
+
+      // Regular bills
+      BILL_POSITIONS.forEach((bill, i) => {
+        if (store.collectedBills.has(i)) return
+        const billScreenX = (bill.x - dWX) * factor
+        if (Math.abs(billScreenX - charCenterX) < xHalf) {
+          if (bill.y >= charBottom - 10 && bill.y <= charTop + 10) {
+            store.collectBill(i)
+            registerCollectRef.current(false)
+            const id = effectIdRef.current++
+            setCollectEffects((prev) => [...prev, { id, x: billScreenX, y: bill.y }])
+            setTimeout(() => setCollectEffects((prev) => prev.filter((e) => e.id !== id)), 800)
+          }
+        }
+      })
+
+      // Frozen bills
+      if (dWX > 0.55) {
+        FROZEN_BILLS.forEach((bill, i) => {
+          if (collectedFrozenBillsRef.current.has(i)) return
+          const billScreenX = (bill.trigger - dWX) * factor
+          if (Math.abs(billScreenX - charCenterX) < xHalf) {
+            if (bill.y >= charBottom - 10 && bill.y <= charTop + 10) {
+              setCollectedFrozenBills(prev => new Set([...prev, i]))
+              store.collectBill(100 + i)
+              registerCollectRef.current(true)
+              const id = effectIdRef.current++
+              setIceBreakEffects(prev => [...prev, { id, x: billScreenX, y: bill.y }])
+              setTimeout(() => setIceBreakEffects(prev => prev.filter(e => e.id !== id)), 1000)
+            }
+          }
+        })
+      }
     }
 
     animFrameRef.current = requestAnimationFrame(animate)
