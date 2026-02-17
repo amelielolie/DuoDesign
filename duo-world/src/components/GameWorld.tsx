@@ -38,7 +38,7 @@ const BILL_POSITIONS = Array.from({ length: BILL_COUNT }, (_, i) => {
   return {
     x: 0.10 + (i / (BILL_COUNT - 1)) * 0.47,
     y: isHigh
-      ? 50 + seededRandom(i, 100) * 8    // high bills: 50-58%, need jump
+      ? 46 + seededRandom(i, 100) * 6    // high bills: 46-52%, need jump
       : 14 + seededRandom(i, 100) * 20,  // low bills: 14-34%, ground level
   }
 })
@@ -48,7 +48,7 @@ const BILL_POSITIONS = Array.from({ length: BILL_COUNT }, (_, i) => {
 const FROZEN_BILLS = Array.from({ length: 6 }, (_, i) => ({
   trigger: 0.65 + (i / 5) * 0.27,
   y: i % 2 === 0
-    ? 50 + seededRandom(i, 200) * 8     // high: 50-58%, need jump
+    ? 46 + seededRandom(i, 200) * 6     // high: 46-52%, need jump
     : 14 + seededRandom(i, 200) * 20,   // low: 14-34%, ground level
 }))
 
