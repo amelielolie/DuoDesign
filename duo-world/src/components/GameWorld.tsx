@@ -29,17 +29,17 @@ function seededRandom(i: number, seed: number): number {
   return x - Math.floor(x)
 }
 
-// Regular bills across first 3 zones (0.10 to 0.57)
-// Start at 0.10 so first bill is always ahead of the character at game start
+// Regular bills across first 3 zones (0.13 to 0.57)
+// Start at 0.13 so first bill is always well ahead of the character at game start
 // Mix of ground-level and jump-required bills for dynamic gameplay
 const BILL_COUNT = 14
 const BILL_POSITIONS = Array.from({ length: BILL_COUNT }, (_, i) => {
   const isHigh = i % 3 === 1 // every 3rd bill requires jumping (bills 1,4,7,10,13)
   return {
-    x: 0.10 + (i / (BILL_COUNT - 1)) * 0.47,
+    x: 0.13 + (i / (BILL_COUNT - 1)) * 0.44,
     y: isHigh
-      ? 46 + seededRandom(i, 100) * 6    // high bills: 46-52%, need jump
-      : 14 + seededRandom(i, 100) * 20,  // low bills: 14-34%, ground level
+      ? 40 + seededRandom(i, 100) * 4    // high bills: 40-44%, need jump on desktop
+      : 14 + seededRandom(i, 100) * 18,  // low bills: 14-32%, ground level
   }
 })
 
@@ -48,8 +48,8 @@ const BILL_POSITIONS = Array.from({ length: BILL_COUNT }, (_, i) => {
 const FROZEN_BILLS = Array.from({ length: 6 }, (_, i) => ({
   trigger: 0.65 + (i / 5) * 0.27,
   y: i % 2 === 0
-    ? 46 + seededRandom(i, 200) * 6     // high: 46-52%, need jump
-    : 14 + seededRandom(i, 200) * 20,   // low: 14-34%, ground level
+    ? 40 + seededRandom(i, 200) * 4     // high: 40-44%, need jump on desktop
+    : 14 + seededRandom(i, 200) * 18,   // low: 14-32%, ground level
 }))
 
 let videoPreloaded = false
@@ -381,17 +381,19 @@ export function GameWorld() {
       const ground = getGroundPct(winW, winH)
       const charBottom = ground + (jumpYRef.current / winH) * 100
       const charTop = charBottom + charHeightPct
-      const xHalf = charWidthPct / 2 + 8
+      const xHalf = charWidthPct / 2 + 2
       const dWX = displayWorldXRef.current
 
       const store = useGameStore.getState()
 
-      // Regular bills
+      // Regular bills — only collide when bill is visually on screen
       BILL_POSITIONS.forEach((bill, i) => {
         if (store.collectedBills.has(i)) return
         const billScreenX = (bill.x - dWX) * factor
+        // Bill must be on screen before it can be collected
+        if (billScreenX < 5 || billScreenX > 95) return
         if (Math.abs(billScreenX - charCenterX) < xHalf) {
-          if (bill.y >= charBottom - 10 && bill.y <= charTop + 10) {
+          if (bill.y >= charBottom - 5 && bill.y <= charTop + 5) {
             store.collectBill(i)
             registerCollectRef.current(false)
             const id = effectIdRef.current++
@@ -401,13 +403,14 @@ export function GameWorld() {
         }
       })
 
-      // Frozen bills
+      // Frozen bills — only collide when bill is visually on screen
       if (dWX > 0.55) {
         FROZEN_BILLS.forEach((bill, i) => {
           if (collectedFrozenBillsRef.current.has(i)) return
           const billScreenX = (bill.trigger - dWX) * factor
+          if (billScreenX < 5 || billScreenX > 95) return
           if (Math.abs(billScreenX - charCenterX) < xHalf) {
-            if (bill.y >= charBottom - 10 && bill.y <= charTop + 10) {
+            if (bill.y >= charBottom - 5 && bill.y <= charTop + 5) {
               setCollectedFrozenBills(prev => new Set([...prev, i]))
               store.collectBill(100 + i)
               registerCollectRef.current(true)
