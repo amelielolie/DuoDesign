@@ -37,7 +37,7 @@ const BILL_POSITIONS = Array.from({ length: BILL_COUNT }, (_, i) => {
   return {
     x: 0.065 + (i / (BILL_COUNT - 1)) * 0.635,  // 0.065 to 0.70
     y: isHigh
-      ? 34 + seededRandom(i, 100) * 6   // high: 34-40%, need jump
+      ? 40 + seededRandom(i, 100) * 4   // high: 40-44%, need jump
       : 14 + seededRandom(i, 100) * 14,  // low: 14-28%, above ground level
   }
 })
@@ -47,7 +47,7 @@ const BILL_POSITIONS = Array.from({ length: BILL_COUNT }, (_, i) => {
 const FROZEN_BILLS = Array.from({ length: 8 }, (_, i) => ({
   trigger: 0.68 + (i / 7) * 0.27,  // 0.68 to 0.95
   y: i % 2 === 0
-    ? 34 + seededRandom(i, 200) * 6     // high: 34-40%, need jump
+    ? 40 + seededRandom(i, 200) * 4     // high: 40-44%, need jump
     : 14 + seededRandom(i, 200) * 14,   // low: 14-28%, above ground level
 }))
 
@@ -377,7 +377,7 @@ export function GameWorld() {
       const charWidthPct = Math.min(45, 280 / winW * 100)
       const charCenterX = 38 + charWidthPct / 2
       const charDivHeightPct = (Math.min(winW * 0.45, 280) * 1.3) / winH * 100
-      const charHeightPct = charDivHeightPct * 0.78  // visible body including head
+      const charHeightPct = charDivHeightPct * 0.72  // visible body including head
       const ground = getGroundPct(winW, winH)
       const charBottom = ground + (jumpYRef.current / winH) * 100
       const charTop = charBottom + charHeightPct
