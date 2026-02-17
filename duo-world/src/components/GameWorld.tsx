@@ -29,27 +29,26 @@ function seededRandom(i: number, seed: number): number {
   return x - Math.floor(x)
 }
 
-// Regular bills from near-spawn (0.05) to rain corridor (0.57)
-// First bill visible on phone at game start, tighter spacing early on
+// Regular bills spread across all zones (0.065 to 0.70)
 // Every 3rd bill is high (requires jumping on phone)
-const BILL_COUNT = 14
+const BILL_COUNT = 20
 const BILL_POSITIONS = Array.from({ length: BILL_COUNT }, (_, i) => {
-  const isHigh = i % 3 === 1 // bills 1,4,7,10,13 require jumping
+  const isHigh = i % 3 === 1  // bills 1,4,7,10,13,16,19 require jumping
   return {
-    x: 0.06 + (i / (BILL_COUNT - 1)) * 0.51,
+    x: 0.065 + (i / (BILL_COUNT - 1)) * 0.635,  // 0.065 to 0.70
     y: isHigh
-      ? 52 + seededRandom(i, 100) * 3   // high bills: 52-55%, need jump
-      : 14 + seededRandom(i, 100) * 18,  // low bills: 14-32%, ground level
+      ? 34 + seededRandom(i, 100) * 6   // high: 34-40%, need jump
+      : 10 + seededRandom(i, 100) * 16,  // low: 10-26%, ground level
   }
 })
 
-// Frozen bills across blizzard zone (0.65 to 0.92)
+// Frozen bills across blizzard zone (0.68 to 0.95)
 // Alternate high/low for variety
-const FROZEN_BILLS = Array.from({ length: 6 }, (_, i) => ({
-  trigger: 0.65 + (i / 5) * 0.27,
+const FROZEN_BILLS = Array.from({ length: 8 }, (_, i) => ({
+  trigger: 0.68 + (i / 7) * 0.27,  // 0.68 to 0.95
   y: i % 2 === 0
-    ? 52 + seededRandom(i, 200) * 3     // high: 52-55%, need jump
-    : 14 + seededRandom(i, 200) * 18,   // low: 14-32%, ground level
+    ? 34 + seededRandom(i, 200) * 6     // high: 34-40%, need jump
+    : 10 + seededRandom(i, 200) * 16,   // low: 10-26%, ground level
 }))
 
 let videoPreloaded = false
@@ -377,11 +376,12 @@ export function GameWorld() {
       const factor = ms / winW * 100 + 100
       const charWidthPct = Math.min(45, 280 / winW * 100)
       const charCenterX = 38 + charWidthPct / 2
-      const charHeightPct = (Math.min(winW * 0.45, 280) * 1.3) / winH * 100
+      const charDivHeightPct = (Math.min(winW * 0.45, 280) * 1.3) / winH * 100
+      const charHeightPct = charDivHeightPct * 0.65  // visible body only
       const ground = getGroundPct(winW, winH)
       const charBottom = ground + (jumpYRef.current / winH) * 100
       const charTop = charBottom + charHeightPct
-      const xHalf = charWidthPct / 4  // sprite body is ~half the div width
+      const xHalf = charWidthPct * 0.15  // tight to visible body
       const dWX = displayWorldXRef.current
 
       const store = useGameStore.getState()
@@ -393,7 +393,7 @@ export function GameWorld() {
         // Bill must be on screen before it can be collected
         if (billScreenX < 5 || billScreenX > 95) return
         if (Math.abs(billScreenX - charCenterX) < xHalf) {
-          if (bill.y >= charBottom - 5 && bill.y <= charTop + 5) {
+          if (bill.y >= charBottom && bill.y <= charTop) {
             store.collectBill(i)
             registerCollectRef.current(false)
             const id = effectIdRef.current++
@@ -404,13 +404,13 @@ export function GameWorld() {
       })
 
       // Frozen bills — only collide when bill is visually on screen
-      if (dWX > 0.55) {
+      if (dWX > 0.60) {
         FROZEN_BILLS.forEach((bill, i) => {
           if (collectedFrozenBillsRef.current.has(i)) return
           const billScreenX = (bill.trigger - dWX) * factor
           if (billScreenX < 5 || billScreenX > 95) return
           if (Math.abs(billScreenX - charCenterX) < xHalf) {
-            if (bill.y >= charBottom - 5 && bill.y <= charTop + 5) {
+            if (bill.y >= charBottom && bill.y <= charTop) {
               setCollectedFrozenBills(prev => new Set([...prev, i]))
               store.collectBill(100 + i)
               registerCollectRef.current(true)
@@ -754,19 +754,31 @@ export function GameWorld() {
               background: 'linear-gradient(135deg, #1a6b1a, #2ecc40, #1a6b1a)',
               borderRadius: '2px',
               border: '1px solid rgba(46, 204, 64, 0.5)',
+              boxShadow: '0 0 12px rgba(46, 204, 64, 0.4), 0 2px 4px rgba(0,0,0,0.3)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               fontSize: '10px',
               fontWeight: 700,
               color: '#0a3d0a',
-              animation: 'billFloat 1.5s ease-in-out infinite',
+              animation: 'billFloat 1.5s ease-in-out infinite, billGlow 2s ease-in-out infinite',
               animationDelay: `${i * 0.15}s`,
               zIndex: 8,
               pointerEvents: 'none',
+              overflow: 'hidden',
             }}
           >
             $
+            <div style={{
+              position: 'absolute',
+              top: 0,
+              left: '-100%',
+              width: '100%',
+              height: '100%',
+              background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent)',
+              animation: 'billShimmer 2.5s ease-in-out infinite',
+              animationDelay: `${i * 0.2}s`,
+            }} />
           </div>
         )
       })}
@@ -788,18 +800,20 @@ export function GameWorld() {
               background: 'linear-gradient(135deg, #a8d8ea, #caf0f8, #90e0ef)',
               borderRadius: '3px',
               border: '2px solid rgba(173, 216, 230, 0.8)',
+              boxShadow: '0 0 15px rgba(135, 206, 250, 0.5), inset 0 0 8px rgba(255,255,255,0.3)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               fontSize: '12px',
               fontWeight: 900,
               color: '#1a5f7a',
-              animation: 'frozenFloat 2s ease-in-out infinite',
+              animation: 'frozenFloat 2s ease-in-out infinite, frozenShimmer 3s linear infinite',
               zIndex: 9,
               pointerEvents: 'none',
+              overflow: 'hidden',
             }}
           >
-            <span style={{ textShadow: '0 0 4px rgba(255,255,255,0.8)' }}>$</span>
+            <span style={{ textShadow: '0 0 4px rgba(255,255,255,0.8)', zIndex: 1 }}>$</span>
             <div style={{
               position: 'absolute',
               top: '-5px',
@@ -809,6 +823,16 @@ export function GameWorld() {
               height: '8px',
               background: 'rgba(255,255,255,0.9)',
               clipPath: 'polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)',
+              zIndex: 1,
+            }} />
+            <div style={{
+              position: 'absolute',
+              top: 0,
+              left: '-100%',
+              width: '200%',
+              height: '100%',
+              background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent)',
+              animation: 'frozenShimmerSlide 2s linear infinite',
             }} />
           </div>
         )
@@ -827,8 +851,8 @@ export function GameWorld() {
           }}
         >
           <div style={{
-            width: '60px',
-            height: '60px',
+            width: '80px',
+            height: '80px',
             position: 'relative',
             transform: 'translate(-50%, 50%)',
           }}>
@@ -837,22 +861,40 @@ export function GameWorld() {
               top: '50%',
               left: '50%',
               transform: 'translate(-50%, -50%)',
-              width: '50px',
-              height: '50px',
+              width: '70px',
+              height: '70px',
               borderRadius: '50%',
-              background: 'radial-gradient(circle, rgba(255,255,255,0.9), rgba(173,216,230,0.5) 40%, transparent 70%)',
-              animation: 'iceFlash 0.5s ease-out forwards',
+              background: 'radial-gradient(circle, rgba(255,255,255,0.95), rgba(135,206,250,0.6) 35%, rgba(173,216,230,0.3) 60%, transparent 80%)',
+              animation: 'iceFlash 0.6s ease-out forwards',
             }} />
+            {/* Ice shard particles */}
+            {[0, 60, 120, 200, 270, 330].map((angle, si) => (
+              <div key={si} style={{
+                position: 'absolute',
+                top: '50%',
+                left: '50%',
+                width: '6px',
+                height: '10px',
+                background: 'linear-gradient(to bottom, rgba(200,230,255,0.9), rgba(135,206,250,0.4))',
+                clipPath: 'polygon(50% 0%, 100% 100%, 0% 100%)',
+                transformOrigin: 'center center',
+                animation: `iceShard 0.6s ease-out forwards`,
+                opacity: 0,
+                animationDelay: `${si * 0.03}s`,
+                ['--shard-angle' as string]: `${angle}deg`,
+                ['--shard-dist' as string]: `${28 + si * 4}px`,
+              }} />
+            ))}
           </div>
           <div style={{
             position: 'absolute',
-            top: '-20px',
+            top: '-24px',
             left: '50%',
             transform: 'translateX(-50%)',
             color: '#7dd3fc',
             fontSize: '1.4rem',
             fontWeight: 900,
-            textShadow: '0 0 12px rgba(125, 211, 252, 0.8)',
+            textShadow: '0 0 16px rgba(125, 211, 252, 0.9), 0 0 30px rgba(135, 206, 250, 0.4)',
             animation: 'collectText 0.8s ease-out forwards',
           }}>
             +$
@@ -880,16 +922,41 @@ export function GameWorld() {
             animation: 'collectFlash 0.6s ease-out forwards',
             transform: 'translate(-50%, 50%)',
           }} />
+          {/* Sparkle particles */}
+          {[
+            { angle: -30, dist: 24, delay: 0 },
+            { angle: 30, dist: 28, delay: 0.04 },
+            { angle: -80, dist: 20, delay: 0.02 },
+            { angle: 80, dist: 26, delay: 0.06 },
+            { angle: -150, dist: 22, delay: 0.03 },
+            { angle: 160, dist: 25, delay: 0.05 },
+          ].map((spark, si) => (
+            <div key={si} style={{
+              position: 'absolute',
+              top: '50%',
+              left: '50%',
+              width: '4px',
+              height: '4px',
+              borderRadius: '50%',
+              background: '#2ecc40',
+              boxShadow: '0 0 6px rgba(46, 204, 64, 0.8)',
+              opacity: 0,
+              animation: 'sparkleOut 0.6s ease-out forwards',
+              animationDelay: `${spark.delay}s`,
+              ['--spark-angle' as string]: `${spark.angle}deg`,
+              ['--spark-dist' as string]: `${spark.dist}px`,
+            }} />
+          ))}
           <div style={{
             position: 'absolute',
-            top: '-10px',
+            top: '-14px',
             left: '50%',
             transform: 'translateX(-50%)',
             color: '#2ecc40',
-            fontSize: '1.2rem',
+            fontSize: '1.4rem',
             fontWeight: 900,
-            textShadow: '0 0 8px rgba(46, 204, 64, 0.7)',
-            animation: 'collectText 0.8s ease-out forwards',
+            textShadow: '0 0 12px rgba(46, 204, 64, 0.8), 0 0 24px rgba(46, 204, 64, 0.3)',
+            animation: 'collectText 0.8s ease-out forwards, collectScale 0.4s ease-out forwards',
           }}>
             +$
           </div>
