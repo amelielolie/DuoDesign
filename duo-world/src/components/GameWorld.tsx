@@ -29,16 +29,16 @@ function seededRandom(i: number, seed: number): number {
   return x - Math.floor(x)
 }
 
-// Regular bills across first 3 zones (0.13 to 0.57)
-// Start at 0.13 so first bill is always well ahead of the character at game start
-// Mix of ground-level and jump-required bills for dynamic gameplay
+// Regular bills from near-spawn (0.05) to rain corridor (0.57)
+// First bill visible on phone at game start, tighter spacing early on
+// Every 3rd bill is high (requires jumping on phone)
 const BILL_COUNT = 14
 const BILL_POSITIONS = Array.from({ length: BILL_COUNT }, (_, i) => {
-  const isHigh = i % 3 === 1 // every 3rd bill requires jumping (bills 1,4,7,10,13)
+  const isHigh = i % 3 === 1 // bills 1,4,7,10,13 require jumping
   return {
-    x: 0.13 + (i / (BILL_COUNT - 1)) * 0.44,
+    x: 0.06 + (i / (BILL_COUNT - 1)) * 0.51,
     y: isHigh
-      ? 40 + seededRandom(i, 100) * 4    // high bills: 40-44%, need jump on desktop
+      ? 46 + seededRandom(i, 100) * 4   // high bills: 46-50%, need jump
       : 14 + seededRandom(i, 100) * 18,  // low bills: 14-32%, ground level
   }
 })
@@ -48,7 +48,7 @@ const BILL_POSITIONS = Array.from({ length: BILL_COUNT }, (_, i) => {
 const FROZEN_BILLS = Array.from({ length: 6 }, (_, i) => ({
   trigger: 0.65 + (i / 5) * 0.27,
   y: i % 2 === 0
-    ? 40 + seededRandom(i, 200) * 4     // high: 40-44%, need jump on desktop
+    ? 46 + seededRandom(i, 200) * 4     // high: 46-50%, need jump
     : 14 + seededRandom(i, 200) * 18,   // low: 14-32%, ground level
 }))
 
