@@ -63,6 +63,11 @@ function preloadEndingVideo() {
   document.head.appendChild(link)
 }
 
+// Ground level: lower on landscape/desktop so character walks on the ground
+function getGroundPct(w: number, h: number): number {
+  return Math.max(3, 12 - Math.max(0, w / h - 0.7) * 8)
+}
+
 const HORIZONTAL_ACCEL_SMOOTHING = 0.42  // snappy ramp-up
 const HORIZONTAL_DECAY = 0.91            // gentler coast-to-stop
 const FIRST_JUMP_VELOCITY = 18
@@ -270,7 +275,7 @@ export function GameWorld() {
       if (collectedBills.has(i)) return
       const billScreenX = (bill.x - displayWorldX) * factor
       if (Math.abs(billScreenX - charCenterX) < charWidthPct / 2 + 8) {
-        const charBottom = 12 + (jumpY / winH) * 100
+        const charBottom = getGroundPct(winW, winH) + (jumpY / winH) * 100
         const charTop = charBottom + charHeightPct
         if (bill.y >= charBottom - 10 && bill.y <= charTop + 10) {
           collectBill(i)
@@ -298,7 +303,7 @@ export function GameWorld() {
       if (collectedFrozenBills.has(i)) return
       const billScreenX = (bill.trigger - displayWorldX) * factor
       if (Math.abs(billScreenX - charCenterX) < charWidthPct / 2 + 8) {
-        const charBottom = 12 + (jumpY / winH) * 100
+        const charBottom = getGroundPct(winW, winH) + (jumpY / winH) * 100
         const charTop = charBottom + charHeightPct
         if (bill.y >= charBottom - 10 && bill.y <= charTop + 10) {
           setCollectedFrozenBills(prev => new Set([...prev, i]))
@@ -317,7 +322,8 @@ export function GameWorld() {
   const triggerJump = useCallback(() => {
     if (jumpCountRef.current >= maxJumps) return
     const isDoubleJump = jumpCountRef.current > 0
-    const boost = isDoubleJump ? DOUBLE_JUMP_VELOCITY : FIRST_JUMP_VELOCITY
+    const jumpScale = windowSizeRef.current.h / 800
+    const boost = (isDoubleJump ? DOUBLE_JUMP_VELOCITY : FIRST_JUMP_VELOCITY) * jumpScale
     isJumpingRef.current = true
     jumpVelocityRef.current = boost
     setJumping(true)
@@ -375,11 +381,12 @@ export function GameWorld() {
     }
 
     if (isJumpingRef.current) {
+      const jumpScale = windowSizeRef.current.h / 800
       const nextJumpY = jumpYRef.current + jumpVelocityRef.current * dtFactor
-      jumpVelocityRef.current = (jumpVelocityRef.current - GRAVITY * dtFactor) * Math.pow(VERTICAL_DAMPING, dtFactor)
+      jumpVelocityRef.current = (jumpVelocityRef.current - GRAVITY * jumpScale * dtFactor) * Math.pow(VERTICAL_DAMPING, dtFactor)
 
       if (nextJumpY <= 0 && jumpVelocityRef.current <= 0) {
-        const wasHigh = jumpYRef.current > 30
+        const wasHigh = jumpYRef.current > 30 * jumpScale
         isJumpingRef.current = false
         jumpVelocityRef.current = 0
         jumpYRef.current = 0
@@ -1078,7 +1085,7 @@ export function GameWorld() {
       {/* Character */}
       <div style={{
         position: 'absolute',
-        bottom: `${12 + (phase === 'dancing' ? 0 : (jumpY / windowSizeRef.current.h) * 100)}%`,
+        bottom: `${getGroundPct(windowSizeRef.current.w, windowSizeRef.current.h) + (phase === 'dancing' ? 0 : (jumpY / windowSizeRef.current.h) * 100)}%`,
         left: '38%',
         width: '45vw',
         maxWidth: '280px',
@@ -1116,7 +1123,7 @@ export function GameWorld() {
           key={p.id}
           style={{
             position: 'absolute',
-            bottom: '12%',
+            bottom: `${getGroundPct(windowSizeRef.current.w, windowSizeRef.current.h)}%`,
             left: '45%',
             width: '6px',
             height: '6px',
