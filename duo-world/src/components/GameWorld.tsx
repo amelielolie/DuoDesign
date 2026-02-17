@@ -253,13 +253,17 @@ export function GameWorld() {
     const winW = windowSizeRef.current.w
     const winH = windowSizeRef.current.h
     const factor = maxScroll / winW * 100 + 100
+    // Character dimensions matching the rendered sprite
+    const charWidthPct = Math.min(45, 280 / winW * 100)
+    const charCenterX = 38 + charWidthPct / 2
+    const charHeightPct = (Math.min(winW * 0.45, 280) * 1.3) / winH * 100
     BILL_POSITIONS.forEach((bill, i) => {
       if (collectedBills.has(i)) return
-      const billScreenX = (bill.x - worldX) * factor
-      if (Math.abs(billScreenX - 45) < 18) {
+      const billScreenX = (bill.x - displayWorldX) * factor
+      if (Math.abs(billScreenX - charCenterX) < charWidthPct / 2 + 4) {
         const charBottom = 12 + (jumpY / winH) * 100
-        const charTop = charBottom + 18
-        if (bill.y >= charBottom - 2 && bill.y <= charTop + 2) {
+        const charTop = charBottom + charHeightPct
+        if (bill.y >= charBottom - 4 && bill.y <= charTop + 4) {
           collectBill(i)
           registerCollect(false)
           const id = effectIdRef.current++
@@ -270,21 +274,24 @@ export function GameWorld() {
         }
       }
     })
-  }, [worldX, jumpY, collectedBills, collectBill, registerCollect, maxScroll])
+  }, [displayWorldX, jumpY, collectedBills, collectBill, registerCollect, maxScroll])
 
   // Frozen bill collision (screen-position based, same as regular bills)
   useEffect(() => {
-    if (maxScroll === 0 || worldX < 0.55) return
+    if (maxScroll === 0 || displayWorldX < 0.55) return
     const winW = windowSizeRef.current.w
     const winH = windowSizeRef.current.h
     const factor = maxScroll / winW * 100 + 100
+    const charWidthPct = Math.min(45, 280 / winW * 100)
+    const charCenterX = 38 + charWidthPct / 2
+    const charHeightPct = (Math.min(winW * 0.45, 280) * 1.3) / winH * 100
     FROZEN_BILLS.forEach((bill, i) => {
       if (collectedFrozenBills.has(i)) return
-      const billScreenX = (bill.trigger - worldX) * factor
-      if (Math.abs(billScreenX - 45) < 20) {
+      const billScreenX = (bill.trigger - displayWorldX) * factor
+      if (Math.abs(billScreenX - charCenterX) < charWidthPct / 2 + 4) {
         const charBottom = 12 + (jumpY / winH) * 100
-        const charTop = charBottom + 18
-        if (bill.y >= charBottom - 2 && bill.y <= charTop + 2) {
+        const charTop = charBottom + charHeightPct
+        if (bill.y >= charBottom - 4 && bill.y <= charTop + 4) {
           setCollectedFrozenBills(prev => new Set([...prev, i]))
           collectBill(100 + i)
           registerCollect(true)
@@ -296,7 +303,7 @@ export function GameWorld() {
         }
       }
     })
-  }, [worldX, jumpY, collectedFrozenBills, collectBill, registerCollect, maxScroll])
+  }, [displayWorldX, jumpY, collectedFrozenBills, collectBill, registerCollect, maxScroll])
 
   const triggerJump = useCallback(() => {
     if (jumpCountRef.current >= maxJumps) return
