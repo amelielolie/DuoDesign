@@ -31,16 +31,25 @@ function seededRandom(i: number, seed: number): number {
 
 // Regular bills across first 3 zones (0.10 to 0.57)
 // Start at 0.10 so first bill is always ahead of the character at game start
+// Mix of ground-level and jump-required bills for dynamic gameplay
 const BILL_COUNT = 14
-const BILL_POSITIONS = Array.from({ length: BILL_COUNT }, (_, i) => ({
-  x: 0.10 + (i / (BILL_COUNT - 1)) * 0.47,
-  y: 16 + seededRandom(i, 100) * 22,
-}))
+const BILL_POSITIONS = Array.from({ length: BILL_COUNT }, (_, i) => {
+  const isHigh = i % 3 === 1 // every 3rd bill requires jumping (bills 1,4,7,10,13)
+  return {
+    x: 0.10 + (i / (BILL_COUNT - 1)) * 0.47,
+    y: isHigh
+      ? 50 + seededRandom(i, 100) * 8    // high bills: 50-58%, need jump
+      : 14 + seededRandom(i, 100) * 20,  // low bills: 14-34%, ground level
+  }
+})
 
 // Frozen bills across blizzard zone (0.65 to 0.92)
+// Alternate high/low for variety
 const FROZEN_BILLS = Array.from({ length: 6 }, (_, i) => ({
   trigger: 0.65 + (i / 5) * 0.27,
-  y: 16 + seededRandom(i, 200) * 22,
+  y: i % 2 === 0
+    ? 50 + seededRandom(i, 200) * 8     // high: 50-58%, need jump
+    : 14 + seededRandom(i, 200) * 20,   // low: 14-34%, ground level
 }))
 
 let videoPreloaded = false
@@ -263,7 +272,7 @@ export function GameWorld() {
       if (Math.abs(billScreenX - charCenterX) < charWidthPct / 2 + 8) {
         const charBottom = 12 + (jumpY / winH) * 100
         const charTop = charBottom + charHeightPct
-        if (bill.y >= charBottom - 12 && bill.y <= charTop + 12) {
+        if (bill.y >= charBottom - 10 && bill.y <= charTop + 10) {
           collectBill(i)
           registerCollect(false)
           const id = effectIdRef.current++
@@ -291,7 +300,7 @@ export function GameWorld() {
       if (Math.abs(billScreenX - charCenterX) < charWidthPct / 2 + 8) {
         const charBottom = 12 + (jumpY / winH) * 100
         const charTop = charBottom + charHeightPct
-        if (bill.y >= charBottom - 12 && bill.y <= charTop + 12) {
+        if (bill.y >= charBottom - 10 && bill.y <= charTop + 10) {
           setCollectedFrozenBills(prev => new Set([...prev, i]))
           collectBill(100 + i)
           registerCollect(true)
