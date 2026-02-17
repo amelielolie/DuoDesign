@@ -381,7 +381,7 @@ export function GameWorld() {
       const ground = getGroundPct(winW, winH)
       const charBottom = ground + (jumpYRef.current / winH) * 100
       const charTop = charBottom + charHeightPct
-      const xHalf = charWidthPct / 2 + 2
+      const xHalf = charWidthPct / 2
       const dWX = displayWorldXRef.current
 
       const store = useGameStore.getState()
